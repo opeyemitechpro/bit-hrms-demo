@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BIT-HRMS — Bureau of Information Technology | Ogun State Government</title>
+    <link rel="icon" type="image/png" href="/images/ogun_state_logo.png" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @media print {
+        @page {
+          size: landscape;
+          margin: 8mm 6mm;
+        }
+        body {
+          background-color: #ffffff !important;
+          color: #000000 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        aside, header, nav, button, select, input, .no-print {
+          display: none !important;
+        }
+        .print-only {
+          display: block !important;
+        }
+        main, .content-area {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+        }
+        table {
+          width: 100% !important;
+          font-size: 8pt !important;
+          border-collapse: collapse !important;
+        }
+        th, td {
+          padding: 3px 5px !important;
+          border: 1px solid #94a3b8 !important;
+        }
+        th {
+          background-color: #f1f5f9 !important;
+          color: #0f172a !important;
+          font-weight: 700 !important;
+        }
+        thead {
+          display: table-header-group !important;
+        }
+        tr {
+          page-break-inside: avoid !important;
+        }
+        .page-break-inside-avoid {
+          page-break-inside: avoid !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-100 font-sans text-slate-800 antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
