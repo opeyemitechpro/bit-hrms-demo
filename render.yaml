@@ -1,0 +1,105 @@
+# BIT-HRMS Render.com Deployment Configuration
+# This file is used to deploy the application on Render.com
+# See: https://render.com/docs/deploy
+
+services:
+  - type: web
+    name: bit-hrms-backend
+    env: docker
+    dockerfile: Dockerfile.backend
+    region: oregon
+    plan: standard
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_NAME
+        value: BIT-HRMS
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        sync: true
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        sync: true
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        sync: true
+      - key: DB_USERNAME
+        sync: true
+      - key: DB_PASSWORD
+        sync: true
+      - key: CACHE_DRIVER
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: REDIS_HOST
+        sync: true
+      - key: REDIS_PORT
+        value: "6379"
+      - key: REDIS_PASSWORD
+        sync: true
+      - key: LOG_LEVEL
+        value: debug
+      - key: LOG_CHANNEL
+        value: stack
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: strict
+      - key: CSRF_COOKIE_SECURE
+        value: "true"
+      - key: VITE_API_URL
+        sync: true
+    # Auto-deploy on push to main branch
+    autoDeploy: true
+    # Build configuration
+    buildCommand: |
+      composer install --no-interaction --no-progress --no-scripts
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+      php artisan optimize
+    # Start command
+    startCommand: |
+      php artisan migrate --force
+      php artisan serve --host=0.0.0.0 --port=$PORT
+    # Run command
+    runCommand: |
+      php artisan migrate --force
+      php artisan serve --host=0.0.0.0 --port=$PORT
+
+  - type: web
+    name: bit-hrms-frontend
+    env: docker
+    dockerfile: Dockerfile.frontend
+    region: oregon
+    plan: standard
+    healthCheckPath: /
+    envVars:
+      - key: VITE_API_URL
+        sync: true
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: node /usr/local/bin/vite preview --host 0.0.0.0 --port $PORT
+
+databases:
+  - name: bit-hrms-db
+    databaseName: hrms_db
+    databaseUser: hrms_user
+    databasePassword: hrms_password
+    region: oregon
+    plan: basic
+    ipAllowList:
+      - 0.0.0.0/0
+
+redis:
+  - name: bit-hrms-redis
+    region: oregon
+    plan: basic
+    ipAllowList:
+      - 0.0.0.0/0

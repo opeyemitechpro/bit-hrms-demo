@@ -1,0 +1,46 @@
+name: Deploy to Render.com
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Install Composer Dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Install Node Dependencies
+        run: npm ci --prefix frontend
+
+      - name: Run PHP Tests
+        run: php artisan test
+
+      - name: Build Frontend
+        run: npm run build --prefix frontend
+
+  deploy:
+    name: Deploy to Render
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Backend to Render
+        run: |
+          curl -X POST ${{ secrets.RENDER_BACKEND_HOOK_URL }}
+
+      - name: Deploy Frontend to Render
+        run: |
+          curl -X POST ${{ secrets.RENDER_FRONTEND_HOOK_URL }}
