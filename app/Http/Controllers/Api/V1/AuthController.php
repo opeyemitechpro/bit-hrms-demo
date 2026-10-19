@@ -9,10 +9,63 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate(['email' => 'required|email|max:150']);
+
+        Password::sendResetLink([
+            'email' => $request->input('email'),
+            'status' => 'active',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'If an active account matches that email, a password reset link has been sent. Check your inbox and spam folder.',
+        ]);
+    }
+
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'token' => 'required|string',
+            'email' => 'required|email|max:150',
+            'password' => 'required|string|min:8|max:255|confirmed',
+        ]);
+        $credentials['status'] = 'active';
+
+        $status = Password::reset($credentials, function (User $user, string $password) {
+            DB::transaction(function () use ($user, $password) {
+                $user->forceFill([
+                    'password' => Hash::make($password),
+                    'remember_token' => Str::random(60),
+                ])->save();
+                $user->tokens()->delete();
+            });
+
+            event(new PasswordReset($user));
+        });
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This password reset link is invalid or has expired. Please request a new link.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset successfully. Sign in with your new password.',
+        ]);
+    }
+
     /**
      * Authenticate user with credentials and issue a Sanctum token.
      */

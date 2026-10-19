@@ -21,8 +21,9 @@ const ROLES = [
 
 export default function App() {
   // Authentication & Security state
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem("bit_hrms_token") || null);
+  const [authToken, setAuthToken] = useState(() => new URLSearchParams(window.location.search).has("reset_token") ? null : localStorage.getItem("bit_hrms_token") || null);
   const [currentUser, setCurrentUser] = useState(() => {
+    if (new URLSearchParams(window.location.search).has("reset_token")) return null;
     try {
       const saved = localStorage.getItem("bit_hrms_user");
       return saved ? JSON.parse(saved) : null;

@@ -1,9 +1,66 @@
 import React, { useState } from "react";
+import axios from "axios";
+
+const QUICK_ACCESS_ENABLED = false;
 
 export default function LoginPortal({ onLogin, loading, error }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset_token") || "");
+  const [mode, setMode] = useState(() => new URLSearchParams(window.location.search).has("reset_token") ? "reset" : "login");
+  const [email, setEmail] = useState(() => new URLSearchParams(window.location.search).get("email") || "");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const switchMode = (nextMode) => {
+    setMode(nextMode);
+    setRecoveryError("");
+    setNotice("");
+    setPassword("");
+    setNewPassword("");
+    setConfirmation("");
+    setShowPassword(false);
+    if (nextMode !== "reset") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reset_token");
+      url.searchParams.delete("email");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+      setResetToken("");
+    }
+  };
+
+  const handleRecovery = async (event) => {
+    event.preventDefault();
+    setRecoveryError("");
+    setNotice("");
+    if (mode === "reset" && newPassword !== confirmation) {
+      setRecoveryError("Passwords do not match.");
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      const response = await axios.post(`/api/v1/auth/${mode === "forgot" ? "forgot-password" : "reset-password"}`, {
+        email: email.trim(),
+        ...(mode === "reset" ? { token: resetToken, password: newPassword, password_confirmation: confirmation } : {}),
+      });
+      if (mode === "reset") {
+        localStorage.removeItem("bit_hrms_token");
+        localStorage.removeItem("bit_hrms_user");
+        delete axios.defaults.headers.common["Authorization"];
+        switchMode("login");
+      }
+      setNotice(response.data.message);
+    } catch (failure) {
+      const data = failure.response?.data;
+      setRecoveryError(Object.values(data?.errors || {}).flat()[0] || data?.message || "Unable to process your request. Please try again later.");
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
 
   // Pre-configured official demo roles for evaluation and auditing
   const demoAccounts = [
@@ -61,6 +118,7 @@ export default function LoginPortal({ onLogin, loading, error }) {
   };
 
   const handleSelectDemo = (acc) => {
+    if (!QUICK_ACCESS_ENABLED) return;
     setUsername(acc.username);
     setPassword(acc.password);
     onLogin(acc.username, acc.password);
@@ -132,26 +190,27 @@ export default function LoginPortal({ onLogin, loading, error }) {
           {/* Right Login Form Container */}
           <div className="lg:col-span-6 bg-white text-slate-900 rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-200">
             <div className="mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Sign In to Account</h3>
+              <h3 className="text-xl font-bold text-slate-900">{mode === "forgot" ? "Forgot Password" : mode === "reset" ? "Reset Password" : "Sign In to Account"}</h3>
               <p className="text-xs text-slate-500 mt-1">
-                Enter your official username or government email address
+                {mode === "login" ? "Enter your official username or government email address" : mode === "forgot" ? "Enter your registered email address" : "Choose a new password for your account"}
               </p>
             </div>
 
             {/* Error Notification Alert */}
-            {error && (
-              <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs flex items-start gap-2.5 animate-fadeIn">
+            {(recoveryError || (mode === "login" && error)) && (
+              <div role="alert" className="mb-5 p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs flex items-start gap-2.5 animate-fadeIn">
                 <svg className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <div className="leading-snug">{error}</div>
+                <div className="leading-snug">{recoveryError || error}</div>
               </div>
             )}
+            {notice && <div role="status" className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs">{notice}</div>}
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "login" ? <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label htmlFor="login-username" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Official Username / Email
                 </label>
                 <div className="relative">
@@ -162,10 +221,13 @@ export default function LoginPortal({ onLogin, loading, error }) {
                   </div>
                   <input
                     type="text"
+                    name="username"
+                    id="login-username"
+                    autoComplete="username"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. superadmin or hradmin"
+                    placeholder="Enter username or email"
                     className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:bg-white focus:outline-none transition-colors"
                   />
                 </div>
@@ -173,7 +235,7 @@ export default function LoginPortal({ onLogin, loading, error }) {
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <label htmlFor="login-password" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                     Password
                   </label>
                   <button
@@ -192,6 +254,9 @@ export default function LoginPortal({ onLogin, loading, error }) {
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
+                    name="password"
+                    id="login-password"
+                    autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -199,6 +264,12 @@ export default function LoginPortal({ onLogin, loading, error }) {
                     className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:bg-white focus:outline-none transition-colors"
                   />
                 </div>
+              </div>
+
+              <div className="text-right">
+                <button type="button" onClick={() => switchMode("forgot")} disabled={loading} className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50">
+                  Forgot password?
+                </button>
               </div>
 
               <button
@@ -223,10 +294,35 @@ export default function LoginPortal({ onLogin, loading, error }) {
                   </>
                 )}
               </button>
-            </form>
+            </form> : <form onSubmit={handleRecovery} className="space-y-4">
+              <div>
+                <label htmlFor="recovery-email" className="block text-xs font-bold text-slate-700 mb-1.5">Registered Email</label>
+                <input id="recovery-email" name="email" type="email" autoComplete="email" required maxLength={150} value={email} onChange={(event) => setEmail(event.target.value)} readOnly={mode === "reset"} disabled={recoveryLoading} className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+              </div>
+              {mode === "reset" && <>
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label htmlFor="new-password" className="text-xs font-bold text-slate-700">New Password</label>
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-xs text-emerald-700 font-semibold">{showPassword ? "Hide" : "Show"}</button>
+                  </div>
+                  <input id="new-password" name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" required minLength={8} maxLength={255} placeholder="At least 8 characters" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={recoveryLoading} className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+                </div>
+                <div>
+                  <label htmlFor="confirm-password" className="block text-xs font-bold text-slate-700 mb-1.5">Confirm New Password</label>
+                  <input id="confirm-password" name="password_confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" required minLength={8} maxLength={255} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} disabled={recoveryLoading} className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none" />
+                </div>
+              </>}
+              <button type="submit" disabled={recoveryLoading} className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg disabled:opacity-50">
+                {recoveryLoading ? "Please wait..." : mode === "forgot" ? "Send Reset Link" : "Reset Password"}
+              </button>
+              <button type="button" onClick={() => switchMode(mode === "reset" ? "forgot" : "login")} disabled={recoveryLoading} className="block mx-auto text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50">
+                {mode === "reset" ? "Request a new reset link" : "Back to sign in"}
+              </button>
+              {mode === "reset" && <button type="button" onClick={() => switchMode("login")} disabled={recoveryLoading} className="block mx-auto text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50">Back to sign in</button>}
+            </form>}
 
             {/* Quick Testing Accounts Section */}
-            <div className="mt-6 pt-5 border-t border-slate-100">
+            {QUICK_ACCESS_ENABLED && <div className="mt-6 pt-5 border-t border-slate-100">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
                   Quick Access Testing Roles (RBAC)
@@ -256,7 +352,7 @@ export default function LoginPortal({ onLogin, loading, error }) {
                   </button>
                 ))}
               </div>
-            </div>
+            </div>}
 
           </div>
         </div>

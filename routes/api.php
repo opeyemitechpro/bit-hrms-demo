@@ -15,6 +15,8 @@ use App\Models\User;
 Route::prefix("v1")->group(function () {
     // Public Authentication & Demo Accounts Listing
     Route::post("/auth/login", [AuthController::class, "login"])->name("login");
+    Route::post("/auth/forgot-password", [AuthController::class, "forgotPassword"])->middleware('throttle:5,1');
+    Route::post("/auth/reset-password", [AuthController::class, "resetPassword"])->middleware('throttle:5,1');
     Route::get("/auth/demo-users", function () {
         return response()->json([
             'success' => true,
