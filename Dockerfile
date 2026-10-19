@@ -29,7 +29,8 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 COPY . .
 COPY --from=frontend-build /app/public/build ./public/build
 
-RUN php artisan package:discover --ansi \
+RUN rm -f bootstrap/cache/*.php \
+    && php artisan package:discover --ansi \
     && php artisan storage:link \
     && mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
