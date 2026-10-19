@@ -57,6 +57,32 @@ To deploy from `render.yaml`, use **New > Blueprint**. It defines one Docker web
 
 Apply migrations before serving traffic. On platforms with a pre-deploy/release command, use `php artisan migrate --force`. Otherwise run that Artisan command once from a one-off container using the same environment variables.
 
+## Password Recovery
+
+Quick Access Testing Roles is disabled by `QUICK_ACCESS_ENABLED = false` in `src/components/LoginPortal.jsx`; the demo code remains available in source. Existing usernames and passwords are unchanged. Do not rerun user seeders when deploying this change, since they can overwrite passwords.
+
+Run `php artisan migrate --force` against the deployed database to create `password_reset_tokens`. This migration does not modify existing accounts.
+
+Configure these runtime variables to deliver password reset links:
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_URL` | Public HTTPS frontend URL, used in reset links |
+| `MAIL_MAILER` | `smtp` |
+| `MAIL_HOST` | SMTP provider hostname |
+| `MAIL_PORT` | Provider's supported SMTP port |
+| `MAIL_SCHEME` | `smtp` for STARTTLS, or `smtps` for implicit TLS |
+| `MAIL_USERNAME` | SMTP username |
+| `MAIL_PASSWORD` | SMTP password, stored only as a runtime secret |
+| `MAIL_FROM_ADDRESS` | Verified sender address |
+| `MAIL_FROM_NAME` | `BIT-HRMS` |
+
+On Render free services, standard SMTP ports may be blocked. Use a provider supporting port 2525 if available, or configure a supported HTTPS mail transport instead. The default `log` mailer does not deliver email and must not be used for production recovery. If configuration is cached, rebuild the cache after changing runtime settings.
+
+Users select **Forgot password?**, enter the email registered on their account, and follow the emailed link. Reset tokens expire after 60 minutes and can only be used once. Successful resets revoke existing API tokens. Accounts must be active; response messages do not disclose whether an email exists. Seeded placeholder addresses must be replaced with real, reachable account addresses before recovery can be used for those accounts.
+
+Run the isolated recovery tests with `php vendor/bin/phpunit tests/Feature/PasswordRecoveryTest.php`. They use SQLite in memory, not the configured production database.
+
 ## Persistent Uploads
 
 Staff documents are stored on Laravel's local `public` disk at `storage/app/public`. Container filesystems are commonly ephemeral. Attach a persistent volume at `/var/www/html/storage/app/public` or configure durable object storage before relying on uploaded documents in production. This is separate from the external database, which stores document metadata, not file contents.

@@ -19,9 +19,19 @@ class User extends Authenticatable
     }
 
     protected $fillable = [
-        'staff_id', 'name', 'email', 'username', 'password',
-        'role_id', 'department_id', 'status', 'is_first_login',
-        'designation', 'grade_level', 'last_login_at', 'last_login_ip'
+        'staff_id',
+        'name',
+        'email',
+        'username',
+        'password',
+        'role_id',
+        'department_id',
+        'status',
+        'is_first_login',
+        'designation',
+        'grade_level',
+        'last_login_at',
+        'last_login_ip'
     ];
 
     protected $casts = [

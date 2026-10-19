@@ -89,9 +89,9 @@ class AuthController extends Controller
 
         $identifier = $request->input('username');
         $user = User::with('role')
-                    ->where('username', $identifier)
-                    ->orWhere('email', $identifier)
-                    ->first();
+            ->where('username', $identifier)
+            ->orWhere('email', $identifier)
+            ->first();
 
         // Credential validation
         if (!$user || !Hash::check($request->input('password'), $user->password)) {

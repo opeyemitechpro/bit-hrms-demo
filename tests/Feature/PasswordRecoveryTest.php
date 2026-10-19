@@ -38,9 +38,12 @@ class PasswordRecoveryTest extends TestCase
         Notification::fake();
         DB::table('roles')->insert(['id' => 1, 'name' => 'Administrator', 'code' => 'SUPER_ADMIN']);
         User::create([
-            'name' => 'Test Administrator', 'username' => 'superadmin',
-            'email' => 'admin@example.test', 'password' => Hash::make('existing-password'),
-            'role_id' => 1, 'status' => 'active',
+            'name' => 'Test Administrator',
+            'username' => 'superadmin',
+            'email' => 'admin@example.test',
+            'password' => Hash::make('existing-password'),
+            'role_id' => 1,
+            'status' => 'active',
         ]);
     }
 
@@ -75,8 +78,10 @@ class PasswordRecoveryTest extends TestCase
         $user = User::first();
         $user->createToken('existing-session');
         $payload = [
-            'email' => $user->email, 'token' => Password::createToken($user),
-            'password' => 'replacement-password', 'password_confirmation' => 'replacement-password',
+            'email' => $user->email,
+            'token' => Password::createToken($user),
+            'password' => 'replacement-password',
+            'password_confirmation' => 'replacement-password',
         ];
         $this->postJson('/api/v1/auth/reset-password', $payload)->assertOk();
         $this->assertTrue(Hash::check('replacement-password', $user->fresh()->password));
@@ -90,8 +95,10 @@ class PasswordRecoveryTest extends TestCase
         $user = User::first();
         $password = $user->password;
         $payload = [
-            'email' => $user->email, 'token' => 'invalid',
-            'password' => 'replacement-password', 'password_confirmation' => 'replacement-password',
+            'email' => $user->email,
+            'token' => 'invalid',
+            'password' => 'replacement-password',
+            'password_confirmation' => 'replacement-password',
         ];
         $this->postJson('/api/v1/auth/reset-password', $payload)->assertStatus(422);
         $payload['token'] = Password::createToken($user);
@@ -115,7 +122,8 @@ class PasswordRecoveryTest extends TestCase
     {
         foreach (['superadmin', 'admin@example.test'] as $identifier) {
             $this->postJson('/api/v1/auth/login', [
-                'username' => $identifier, 'password' => 'existing-password',
+                'username' => $identifier,
+                'password' => 'existing-password',
             ])->assertOk()->assertJsonPath('success', true);
         }
     }
