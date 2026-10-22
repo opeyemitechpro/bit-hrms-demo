@@ -45,9 +45,9 @@ Route::prefix("v1")->group(function () {
         Route::get("/staff/lookups", [StaffController::class, "lookups"]);
         Route::get("/staff/nominal-roll", [NominalRollController::class, "index"]);
         Route::get("/staff", [StaffController::class, "index"]);
-        Route::get("/staff/{staff}", [StaffController::class, "show"]);
         Route::get("/staff/export", [StaffController::class, "export"]);
         Route::get("/staff/template", [StaffController::class, "template"]);
+        Route::get("/staff/{staff}", [StaffController::class, "show"]);
 
         // Milestone & Statutory Retirement Alerts (Option 3)
         Route::get("/alerts/milestones", [MilestoneAlertController::class, "index"]);

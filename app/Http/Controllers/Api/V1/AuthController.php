@@ -103,7 +103,10 @@ class AuthController extends Controller
                 recordType: User::class,
                 recordId: $user?->id,
                 previousValues: null,
-                newValues: ['attempted_identifier' => $identifier]
+                newValues: ['attempted_identifier' => $identifier],
+                actor: $user,
+                actorUsername: $identifier,
+                ipAddress: $request->ip()
             );
 
             return response()->json([
@@ -137,7 +140,9 @@ class AuthController extends Controller
             recordType: User::class,
             recordId: $user->id,
             previousValues: null,
-            newValues: ['role' => $user->role?->code]
+            newValues: ['role' => $user->role?->code],
+            actor: $user,
+            ipAddress: $request->ip()
         );
 
         return response()->json([

@@ -11,13 +11,25 @@ class AuditLogController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $request->validate([
+            'search' => 'nullable|string|max:255',
+            'action' => 'nullable|string|max:100',
+            'module' => 'nullable|string|max:50',
+            'from' => 'nullable|date',
+            'to' => 'nullable|date',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
+
         $query = AuditLog::query();
 
-        if ($search = $request->input('search')) {
+        if ($search = trim($request->input('search', ''))) {
             $query->where(function ($q) use ($search) {
                 $q->where('username', 'LIKE', "%{$search}%")
                   ->orWhere('action', 'LIKE', "%{$search}%")
-                  ->orWhere('module', 'LIKE', "%{$search}%");
+                  ->orWhere('module', 'LIKE', "%{$search}%")
+                  ->orWhere('ip_address', 'LIKE', "%{$search}%")
+                  ->orWhere('record_type', 'LIKE', "%{$search}%")
+                  ->orWhere('record_id', 'LIKE', "%{$search}%");
             });
         }
 
@@ -29,7 +41,16 @@ class AuditLogController extends Controller
             $query->where('module', $module);
         }
 
-        $logs = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 25));
+        if ($from = $request->input('from')) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+
+        if ($to = $request->input('to')) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        $perPage = min(max($request->integer('per_page', 25), 10), 100);
+        $logs = $query->orderByDesc('created_at')->orderByDesc('id')->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -38,6 +59,9 @@ class AuditLogController extends Controller
                 'current_page' => $logs->currentPage(),
                 'last_page' => $logs->lastPage(),
                 'total' => $logs->total(),
+                'per_page' => $logs->perPage(),
+                'actions' => AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action'),
+                'modules' => AuditLog::query()->select('module')->distinct()->orderBy('module')->pluck('module'),
             ]
         ]);
     }

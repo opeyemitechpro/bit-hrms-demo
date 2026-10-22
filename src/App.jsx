@@ -75,6 +75,10 @@ export default function App() {
   });
   const [stats, setStats] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [auditMeta, setAuditMeta] = useState({ current_page: 1, last_page: 1, total: 0, actions: [], modules: [] });
+  const [auditFilters, setAuditFilters] = useState({ search: "", action: "", module: "", from: "", to: "" });
+  const [debouncedAuditSearch, setDebouncedAuditSearch] = useState("");
+  const [auditPage, setAuditPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -93,6 +97,11 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedAuditSearch(auditFilters.search), 300);
+    return () => clearTimeout(timer);
+  }, [auditFilters.search]);
 
   // Modals
   const [selectedStaff, setSelectedStaff] = useState(null);
@@ -264,15 +273,43 @@ export default function App() {
   };
 
   // Fetch Audit Logs
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = async (page = auditPage) => {
     setAuditLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/admin/audit-logs`);
+      const res = await axios.get(`${API_BASE}/admin/audit-logs`, {
+        params: { ...auditFilters, search: debouncedAuditSearch, page, per_page: 25 },
+      });
       setAuditLogs(res.data.data || []);
+      setAuditMeta(res.data.meta || { current_page: 1, last_page: 1, total: 0, actions: [], modules: [] });
     } catch (err) {
       console.error("Failed to load audit logs", err);
     } finally {
       setAuditLoading(false);
+    }
+  };
+
+  const updateAuditFilter = (key, value) => {
+    setAuditFilters((filters) => ({ ...filters, [key]: value }));
+    setAuditPage(1);
+  };
+
+  const downloadCsv = async (endpoint, filename, params = {}) => {
+    try {
+      const response = await axios.get(`${API_BASE}/staff/${endpoint}`, {
+        params,
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error("CSV download failed", err);
+      setFeedback({ type: "error", message: err.response?.status === 401 ? "Your session has expired. Please sign in again." : "CSV download failed. Please try again." });
     }
   };
 
@@ -291,9 +328,9 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab === "audit" && permissions.canViewAudit && authToken) {
-      fetchAuditLogs();
+      fetchAuditLogs(auditPage);
     }
-  }, [activeTab, permissions.canViewAudit, authToken]);
+  }, [activeTab, permissions.canViewAudit, authToken, auditPage, auditFilters.action, auditFilters.module, auditFilters.from, auditFilters.to, debouncedAuditSearch]);
 
   // Instant Responsive Client-Side Search Filter (0ms latency as the user types)
   const displayNominalRoll = useMemo(() => {
@@ -1056,24 +1093,28 @@ export default function App() {
                     <span>Print / Save PDF</span>
                   </button>
 
-                  <a
-                    href={`${API_BASE}/staff/export?search=${encodeURIComponent(search)}&department_id=${selectedDept}&grade_level_id=${selectedGrade}`}
-                    download
+                  <button
+                    type="button"
+                    onClick={() => downloadCsv("export", `BIT_Nominal_Roll_${new Date().toISOString().slice(0, 10)}.csv`, {
+                      search,
+                      department_id: selectedDept,
+                      grade_level_id: selectedGrade,
+                    })}
                     className="px-3 py-1.5 bg-emerald-800 text-white text-xs font-semibold rounded hover:bg-emerald-900 transition-colors shadow-xs"
                   >
                     ⬇ Export CSV
-                  </a>
+                  </button>
 
                   {permissions.canImport && (
-                    <a
-                      href={`${API_BASE}/staff/template`}
-                      download
+                    <button
+                      type="button"
+                      onClick={() => downloadCsv("template", "BIT_Nominal_Roll_Template.csv")}
                       className="px-3 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded hover:bg-slate-800 transition-colors shadow-xs flex items-center gap-1"
                       title="Download Official CSV Template for Staff Import"
                     >
                       <span>📥</span>
                       <span>CSV Template</span>
-                    </a>
+                    </button>
                   )}
 
                   {permissions.canAddStaff && (
@@ -1318,15 +1359,15 @@ export default function App() {
                   </span>
 
                   {permissions.canImport && (
-                    <a
-                      href={`${API_BASE}/staff/template`}
-                      download
+                    <button
+                      type="button"
+                      onClick={() => downloadCsv("template", "BIT_Nominal_Roll_Template.csv")}
                       className="px-3 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded hover:bg-slate-800 transition-colors shadow-xs flex items-center gap-1"
                       title="Download Official CSV Template for Staff Import"
                     >
                       <span>📥</span>
                       <span>CSV Template</span>
-                    </a>
+                    </button>
                   )}
 
                   <button
@@ -1598,13 +1639,13 @@ export default function App() {
                     <div className="text-xs font-bold text-emerald-900">Download Official CSV Template</div>
                     <div className="text-[11px] text-emerald-700 mt-0.5">Includes reference columns for Department codes, Grade Levels, and DOFA/DOB.</div>
                   </div>
-                  <a
-                    href={`${API_BASE}/staff/template`}
-                    download
+                  <button
+                    type="button"
+                    onClick={() => downloadCsv("template", "BIT_Nominal_Roll_Template.csv")}
                     className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded hover:bg-emerald-800 shadow-xs shrink-0"
                   >
                     ⬇ Download Template (.csv)
-                  </a>
+                  </button>
                 </div>
 
                 <form onSubmit={handleImportSubmit} className="space-y-4 pt-2">
@@ -1706,6 +1747,33 @@ export default function App() {
                 </button>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 bg-white border border-slate-200 rounded-lg p-3">
+                <input
+                  type="search"
+                  value={auditFilters.search}
+                  onChange={(event) => updateAuditFilter("search", event.target.value)}
+                  placeholder="Search username, IP, action, record..."
+                  aria-label="Search audit logs"
+                  className="xl:col-span-2 px-3 py-2 border border-slate-300 rounded text-xs"
+                />
+                <select value={auditFilters.action} onChange={(event) => updateAuditFilter("action", event.target.value)} className="px-3 py-2 border border-slate-300 rounded text-xs" aria-label="Filter by action">
+                  <option value="">All actions</option>
+                  {auditMeta.actions.map((action) => <option key={action} value={action}>{action}</option>)}
+                </select>
+                <select value={auditFilters.module} onChange={(event) => updateAuditFilter("module", event.target.value)} className="px-3 py-2 border border-slate-300 rounded text-xs" aria-label="Filter by module">
+                  <option value="">All modules</option>
+                  {auditMeta.modules.map((module) => <option key={module} value={module}>{module}</option>)}
+                </select>
+                <div className="flex gap-2">
+                  <label className="flex-1 text-[10px] text-slate-500">From
+                    <input type="date" value={auditFilters.from} onChange={(event) => updateAuditFilter("from", event.target.value)} className="block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-slate-800" />
+                  </label>
+                  <label className="flex-1 text-[10px] text-slate-500">To
+                    <input type="date" value={auditFilters.to} onChange={(event) => updateAuditFilter("to", event.target.value)} className="block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-slate-800" />
+                  </label>
+                </div>
+              </div>
+
               <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[650px]">
                   <thead>
@@ -1733,7 +1801,7 @@ export default function App() {
                           <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
                             {log.created_at ? new Date(log.created_at).toLocaleString() : "N/A"}
                           </td>
-                          <td className="py-3 px-4 font-semibold text-slate-800">{log.username}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-800">{log.username || "Unknown"}</td>
                           <td className="py-3 px-4">
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -1748,7 +1816,7 @@ export default function App() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-slate-600">{log.module}</td>
-                          <td className="py-3 px-4 font-mono text-slate-500">{log.ip_address || "127.0.0.1"}</td>
+                          <td className="py-3 px-4 font-mono text-slate-500">{log.ip_address || "Not recorded"}</td>
                           <td className="py-3 px-4">
                             {(log.previous_values || log.new_values) && (
                               <button
@@ -1764,6 +1832,30 @@ export default function App() {
                     )}
                   </tbody>
                 </table>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+                <span>
+                  {auditMeta.total === 0 ? "No matching records" : `Showing ${(auditMeta.current_page - 1) * 25 + 1}-${Math.min(auditMeta.current_page * 25, auditMeta.total)} of ${auditMeta.total} records`}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                    disabled={auditPage <= 1 || auditLoading}
+                    className="px-3 py-1.5 border border-slate-300 rounded disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span>Page {auditMeta.current_page} of {auditMeta.last_page}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAuditPage((page) => Math.min(auditMeta.last_page, page + 1))}
+                    disabled={auditPage >= auditMeta.last_page || auditLoading}
+                    className="px-3 py-1.5 border border-slate-300 rounded disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
           )}
