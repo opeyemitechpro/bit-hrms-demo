@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { Pagination, QuickFilters, RecordFilters } from "./RecordControls";
+import { CircleCheck, Plus, TriangleAlert, X } from "lucide-react";
 
 export default function UserManagementModal({ onClose, apiBase }) {
   const [users, setUsers] = useState([]);
@@ -10,6 +12,23 @@ export default function UserManagementModal({ onClose, apiBase }) {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [filters, setFilters] = useState({ search: "", status: "", role_id: "", department_id: "" });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [position, setPosition] = useState({ key: "", page: 1 });
+  const [perPage, setPerPage] = useState(25);
+  const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const queryKey = JSON.stringify([debouncedSearch, filters.status, filters.role_id, filters.department_id, perPage]);
+  const page = position.key === queryKey ? position.page : 1;
+  const setPage = (value) => setPosition({ key: queryKey, page: value });
+  const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  useEffect(() => {
+    setPosition({ key: queryKey, page: 1 });
+  }, [queryKey]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(filters.search), 300);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
 
   const [form, setForm] = useState({
     name: "",
@@ -23,12 +42,14 @@ export default function UserManagementModal({ onClose, apiBase }) {
     status: "active",
   });
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (signal) => {
     setLoading(true);
     try {
-      const res = await axios.get(`${apiBase}/admin/users`);
+      const res = await axios.get(`${apiBase}/admin/users`, { params: { ...filters, search: debouncedSearch, page, per_page: perPage }, signal });
       if (res.data.success) {
         setUsers(res.data.data.data || res.data.data);
+        setMeta(res.data.data);
+        if (page > res.data.data.last_page) setPage(res.data.data.last_page);
         if (res.data.meta) {
           setRoles(res.data.meta.roles || []);
           setDepartments(res.data.meta.departments || []);
@@ -38,15 +59,18 @@ export default function UserManagementModal({ onClose, apiBase }) {
         }
       }
     } catch (err) {
+      if (axios.isCancel(err)) return;
       setError("Failed to load users list. Please try again.");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const controller = new AbortController();
+    fetchUsers(controller.signal);
+    return () => controller.abort();
+  }, [queryKey, page]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -106,38 +130,50 @@ export default function UserManagementModal({ onClose, apiBase }) {
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer"
           >
-            ✕
+            <X size={18} aria-label="Close user management" />
           </button>
         </div>
 
         {/* Alerts */}
         {error && (
           <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
-            <span>⚠️ {error}</span>
-            <button onClick={() => setError("")} className="font-bold">✕</button>
+            <span><TriangleAlert size={15} className="inline-block mr-1" />{error}</span>
+            <button onClick={() => setError("")} className="font-bold" aria-label="Dismiss error"><X size={15} /></button>
           </div>
         )}
         {successMsg && (
           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between">
-            <span>✅ {successMsg}</span>
-            <button onClick={() => setSuccessMsg("")} className="font-bold">✕</button>
+            <span><CircleCheck size={15} className="inline-block mr-1" />{successMsg}</span>
+            <button onClick={() => setSuccessMsg("")} className="font-bold" aria-label="Dismiss notification"><X size={15} /></button>
           </div>
         )}
 
         {/* Action bar */}
         <div className="flex justify-between items-center">
           <span className="text-xs font-bold text-slate-700">
-            Active User Accounts ({users.length})
+            User Accounts ({meta.total})
           </span>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
-            <span>{showAddForm ? "✕ Cancel" : "+ Create New User"}</span>
+            {showAddForm ? <X size={15} /> : <Plus size={15} />}<span>{showAddForm ? "Cancel" : "Create New User"}</span>
           </button>
         </div>
 
         {/* Create User Form Drawer */}
+        <RecordFilters search={filters.search} onSearch={(value) => updateFilter("search", value)} onReset={() => setFilters({ search: "", status: "", role_id: "", department_id: "" })} label="Search user accounts">
+          <select value={filters.role_id} onChange={(event) => updateFilter("role_id", event.target.value)} aria-label="Filter user role" className="px-3 py-2 border border-slate-300 rounded text-xs max-w-full">
+            <option value="">All roles</option>
+            {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+          </select>
+          <select value={filters.department_id} onChange={(event) => updateFilter("department_id", event.target.value)} aria-label="Filter user department" className="px-3 py-2 border border-slate-300 rounded text-xs max-w-full">
+            <option value="">All departments</option>
+            {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+          </select>
+        </RecordFilters>
+        <QuickFilters options={[{ key: "", label: "All accounts" }, { key: "active", label: "Active" }, { key: "suspended", label: "Suspended" }, { key: "inactive", label: "Inactive" }]} value={filters.status} onChange={(value) => updateFilter("status", value)} label="Account status quick filters" />
+        <Pagination page={meta.current_page} lastPage={meta.last_page} total={meta.total} perPage={perPage} onPage={setPage} onPerPage={setPerPage} loading={loading} />
         {showAddForm && (
           <form
             onSubmit={handleSubmit}

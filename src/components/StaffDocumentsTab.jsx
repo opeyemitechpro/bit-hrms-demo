@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { Pagination, QuickFilters, RecordFilters, useRecordPage } from "./RecordControls";
+import { Award, Building2, FileText, FolderOpen, GraduationCap, Paperclip, TrendingUp, Upload, UserRound, X } from "lucide-react";
 
 export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
   const [documents, setDocuments] = useState([]);
@@ -12,6 +14,7 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
   const [title, setTitle] = useState("");
   const [documentType, setDocumentType] = useState("DEGREE_CERTIFICATE");
   const [file, setFile] = useState(null);
+  const records = useRecordPage(documents, staff.id);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -83,13 +86,13 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
   };
 
   const typeIcons = {
-    APPOINTMENT_LETTER: "📜",
-    CONFIRMATION_GAZETTE: "🏛️",
-    DEGREE_CERTIFICATE: "🎓",
-    NYSC_DISCHARGE: "🎖️",
-    PASSPORT_PHOTO: "👤",
-    PROMOTION_LETTER: "📈",
-    OTHER: "📄",
+    APPOINTMENT_LETTER: <FileText size={20} />,
+    CONFIRMATION_GAZETTE: <Building2 size={20} />,
+    DEGREE_CERTIFICATE: <GraduationCap size={20} />,
+    NYSC_DISCHARGE: <Award size={20} />,
+    PASSPORT_PHOTO: <UserRound size={20} />,
+    PROMOTION_LETTER: <TrendingUp size={20} />,
+    OTHER: <FileText size={20} />,
   };
 
   return (
@@ -104,7 +107,7 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
             onClick={() => setShowUploadForm(!showUploadForm)}
             className="px-3 py-1.5 bg-emerald-700 text-white rounded font-semibold hover:bg-emerald-800 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
           >
-            <span>{showUploadForm ? "✕ Close" : "+ Upload Document"}</span>
+            {showUploadForm ? <X size={15} /> : <Upload size={15} />}<span>{showUploadForm ? "Close" : "Upload Document"}</span>
           </button>
         )}
       </div>
@@ -113,7 +116,7 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
       {showUploadForm && (
         <form onSubmit={handleUpload} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
           <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-            <span>📎</span>
+            <Paperclip size={15} />
             <span>Upload New Officer Credential</span>
           </div>
 
@@ -127,13 +130,13 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
                 onChange={(e) => setDocumentType(e.target.value)}
                 className="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-600 bg-white"
               >
-                <option value="DEGREE_CERTIFICATE">🎓 Academic Degree / HND / ND</option>
-                <option value="APPOINTMENT_LETTER">📜 1st Appointment Letter</option>
-                <option value="CONFIRMATION_GAZETTE">🏛️ Confirmation Gazette / Letter</option>
-                <option value="NYSC_DISCHARGE">🎖️ NYSC Discharge / Exemption</option>
-                <option value="PROMOTION_LETTER">📈 Last Promotion Letter</option>
-                <option value="PASSPORT_PHOTO">👤 Official Passport Photo</option>
-                <option value="OTHER">📄 Other Official Document</option>
+                <option value="DEGREE_CERTIFICATE">Academic Degree / HND / ND</option>
+                <option value="APPOINTMENT_LETTER">1st Appointment Letter</option>
+                <option value="CONFIRMATION_GAZETTE">Confirmation Gazette / Letter</option>
+                <option value="NYSC_DISCHARGE">NYSC Discharge / Exemption</option>
+                <option value="PROMOTION_LETTER">Last Promotion Letter</option>
+                <option value="PASSPORT_PHOTO">Official Passport Photo</option>
+                <option value="OTHER">Other Official Document</option>
               </select>
             </div>
 
@@ -180,20 +183,21 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
       )}
 
       {/* Documents List */}
+      <RecordFilters search={records.search} onSearch={records.setSearch} onReset={records.reset} label="Search personnel documents" />
+      <QuickFilters options={[{ key: "", label: "All documents" }, ...Object.entries(typeLabels).map(([key, label]) => ({ key, label }))]} value={records.filter} onChange={records.setFilter} label="Document category quick filters" />
       {loading ? (
         <div className="py-6 text-center text-slate-400">Loading digital personnel folder...</div>
-      ) : documents.length === 0 ? (
+      ) : records.total === 0 ? (
         <div className="py-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300 text-slate-500">
-          <div className="text-2xl mb-1">📂</div>
-          <div className="font-semibold">No digital credentials attached yet.</div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Click "+ Upload Document" to attach certificates, appointment letters, or photo.</p>
+          <FolderOpen size={24} className="mx-auto mb-1" />
+          <div className="font-semibold">No matching digital credentials.</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {documents.map((doc) => (
+          {records.rows.map((doc) => (
             <div key={doc.id} className="p-3 bg-white rounded-lg border border-slate-200 shadow-xs hover:border-emerald-300 transition-all flex items-start justify-between gap-3">
               <div className="flex items-start gap-2.5 min-w-0">
-                <span className="text-xl shrink-0 p-1.5 bg-slate-100 rounded">{typeIcons[doc.document_type] || "📄"}</span>
+                <span className="shrink-0 p-1.5 bg-slate-100 rounded">{typeIcons[doc.document_type] || <FileText size={20} />}</span>
                 <div className="min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block truncate">
                     {typeLabels[doc.document_type] || doc.document_type}
@@ -227,6 +231,7 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
           ))}
         </div>
       )}
+      <Pagination page={records.page} lastPage={records.lastPage} total={records.total} perPage={records.perPage} onPage={records.onPage} onPerPage={records.setPerPage} loading={loading} />
     </div>
   );
 }

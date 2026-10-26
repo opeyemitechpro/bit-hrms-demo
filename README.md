@@ -64,7 +64,11 @@ php artisan cache:clear
 Laravel application errors are written to `storage/logs/laravel.log`. The local `.env.example` uses file-backed sessions; if using the database session driver, the included sessions migration creates the required table.
 
 ### 7. Audit Log Search & Pagination
-Audit entries record the actor's username and request IP address alongside action, module, timestamp, record reference, and change details. The audit view supports keyword search across username, IP, action, module, and record reference; action/module filters; date range filters; and server-side pagination (25 entries per page). Older entries without an IP are displayed as "Not recorded" rather than guessed.
+Audit entries record the actor's username and request IP address alongside action, module, timestamp, record reference, and change details. A separate User Name column shows the linked account's name, or "Not available" for an unavailable account. Search includes account names, usernames, IPs, actions, modules, and record references. Action quick filters, module/date filters, and adjustable pagination are available.
+
+Staff Nominal Roll, Bureau Staff Registry, and Staff Directory Cards share server-side search, department/grade/status filters, cadre quick filters, and pagination across the entire matching dataset. Milestones, user accounts, import errors, personnel documents, and posting history also support search, relevant quick filters, and pagination. Filters reset pagination to the first matching page.
+
+The Vite development proxy forwards the connecting client's IP, and Laravel trusts loopback proxies by default. Restart Vite and Laravel after changing proxy configuration. For a production reverse proxy, set `TRUSTED_PROXIES` to a comma-separated list of its actual IP addresses or CIDR ranges. The proxy must sanitize incoming forwarded headers and append the real connecting address. Do not trust all internet clients. IPs identify the network address visible to the trusted proxy; a client behind NAT or a VPN may share a public address. Old loopback audit entries cannot be reconstructed and are left unchanged.
 
 ### 8. Nominal Roll CSV Downloads
 The Export CSV action downloads matching staff records, respecting the current text, department, and grade filters. CSV Template downloads the import template. Both requests use the logged-in API token and require an authenticated account; template access is shown to users with import permission.

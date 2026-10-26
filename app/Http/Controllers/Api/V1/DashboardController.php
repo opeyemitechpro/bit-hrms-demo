@@ -21,6 +21,7 @@ class DashboardController extends Controller
                     'retirements_next_12m' => Staff::whereBetween('expected_retirement_date', [now(), now()->addYear()])->count(),
                 ],
                 'by_gender' => Staff::select('gender', DB::raw('count(*) as count'))->groupBy('gender')->pluck('count', 'gender'),
+                'by_department' => Staff::select('department_id', DB::raw('count(*) as count'))->groupBy('department_id')->pluck('count', 'department_id'),
             ]
         ]);
     }

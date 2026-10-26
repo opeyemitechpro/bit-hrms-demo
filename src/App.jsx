@@ -7,6 +7,8 @@ import StaffPostingsTab from "./components/StaffPostingsTab";
 import StaffDocumentsTab from "./components/StaffDocumentsTab";
 import FirstLoginModal from "./components/FirstLoginModal";
 import UserManagementModal from "./components/UserManagementModal";
+import { Pagination, QuickFilters, RecordFilters, STAFF_QUICK_FILTERS, useRecordPage } from "./components/RecordControls";
+import { Building2, CalendarDays, ClipboardList, Download, Folder, MapPin, Printer, RefreshCw, X } from "lucide-react";
 
 const API_BASE = "/api/v1";
 
@@ -65,6 +67,9 @@ export default function App() {
   
   // Data states
   const [staffList, setStaffList] = useState([]);
+  const [staffMeta, setStaffMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const [staffPerPage, setStaffPerPage] = useState(25);
+  const [staffPosition, setStaffPosition] = useState({ key: "", page: 1 });
   const [lookups, setLookups] = useState(() => {
     try {
       const cached = sessionStorage.getItem("bit_hrms_lookups");
@@ -79,6 +84,7 @@ export default function App() {
   const [auditFilters, setAuditFilters] = useState({ search: "", action: "", module: "", from: "", to: "" });
   const [debouncedAuditSearch, setDebouncedAuditSearch] = useState("");
   const [auditPage, setAuditPage] = useState(1);
+  const [auditPerPage, setAuditPerPage] = useState(25);
   const [loading, setLoading] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -88,7 +94,23 @@ export default function App() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("");
   const [selectedGrade, setSelectedGrade] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [staffListCadreFilter, setStaffListCadreFilter] = useState("ALL"); // ALL, PROGRAM_ANALYST, DATA_PROCESSING, POSTED, ACTIVE
+  const staffQueryKey = JSON.stringify([debouncedSearch, searchField, selectedDept, selectedGrade, selectedStatus, staffListCadreFilter, staffPerPage, activeTab]);
+  const staffPage = staffPosition.key === staffQueryKey ? staffPosition.page : 1;
+  const setStaffPage = (page) => setStaffPosition({ key: staffQueryKey, page });
+  useEffect(() => {
+    setStaffPosition({ key: staffQueryKey, page: 1 });
+  }, [staffQueryKey]);
+  const resetStaffFilters = () => {
+    setSearch("");
+    setSearchField("all");
+    setSelectedDept("");
+    setSelectedGrade("");
+    setSelectedStatus("");
+    setStaffListCadreFilter("ALL");
+    setStaffPage(1);
+  };
 
   // Debounce search input by 250ms to prevent server connection flooding
   useEffect(() => {
@@ -157,6 +179,7 @@ export default function App() {
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const importRecords = useRecordPage(importResult?.errors || [], importResult);
 
   // Login handler
   const handleLogin = async (username, password) => {
@@ -242,10 +265,10 @@ export default function App() {
   };
 
   // Fetch Staff from API (Debounced to protect single-threaded server)
-  const fetchStaff = async (searchQuery = debouncedSearch) => {
+  const fetchStaff = async (searchQuery = debouncedSearch, signal) => {
     setLoading(true);
     try {
-      const params = { search: searchQuery, per_page: 100 };
+      const params = { search: searchQuery, search_field: searchField, quick_filter: staffListCadreFilter, status: selectedStatus, page: staffPage, per_page: staffPerPage };
       if (permissions.isDeptRestricted && permissions.deptId) {
         params.department_id = permissions.deptId;
       } else if (selectedDept) {
@@ -253,12 +276,18 @@ export default function App() {
       }
       if (selectedGrade) params.grade_level_id = selectedGrade;
 
-      const res = await axios.get(`${API_BASE}/staff`, { params });
+      const res = await axios.get(`${API_BASE}/staff`, { params, signal });
       setStaffList(res.data.data || []);
+      setStaffMeta(res.data.meta || { current_page: 1, last_page: 1, total: 0 });
+      if (res.data.meta && staffPage > res.data.meta.last_page) setStaffPage(res.data.meta.last_page);
     } catch (err) {
+      if (axios.isCancel(err)) return;
       console.error("Failed to load staff list", err);
+      setStaffList([]);
+      setStaffMeta({ current_page: 1, last_page: 1, total: 0 });
+      setFeedback({ type: "error", message: "Staff records could not be loaded. Please try again." });
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
@@ -277,7 +306,7 @@ export default function App() {
     setAuditLoading(true);
     try {
       const res = await axios.get(`${API_BASE}/admin/audit-logs`, {
-        params: { ...auditFilters, search: debouncedAuditSearch, page, per_page: 25 },
+        params: { ...auditFilters, search: debouncedAuditSearch, page, per_page: auditPerPage },
       });
       setAuditLogs(res.data.data || []);
       setAuditMeta(res.data.meta || { current_page: 1, last_page: 1, total: 0, actions: [], modules: [] });
@@ -322,103 +351,20 @@ export default function App() {
 
   useEffect(() => {
     if (authToken && currentUser) {
-      fetchStaff(debouncedSearch);
+      const controller = new AbortController();
+      fetchStaff(debouncedSearch, controller.signal);
+      return () => controller.abort();
     }
-  }, [debouncedSearch, selectedDept, selectedGrade, currentUser, authToken]);
+  }, [staffQueryKey, staffPage, currentUser, authToken]);
 
   useEffect(() => {
     if (activeTab === "audit" && permissions.canViewAudit && authToken) {
       fetchAuditLogs(auditPage);
     }
-  }, [activeTab, permissions.canViewAudit, authToken, auditPage, auditFilters.action, auditFilters.module, auditFilters.from, auditFilters.to, debouncedAuditSearch]);
+  }, [activeTab, permissions.canViewAudit, authToken, auditPage, auditPerPage, auditFilters.action, auditFilters.module, auditFilters.from, auditFilters.to, debouncedAuditSearch]);
 
-  // Instant Responsive Client-Side Search Filter (0ms latency as the user types)
-  const displayNominalRoll = useMemo(() => {
-    if (!search.trim()) return staffList;
-    const term = search.toLowerCase().trim();
-    return staffList.filter((s) => {
-      const ogNo = (s.ogun_employee_number || "").toLowerCase();
-      const staffNo = (s.staff_number || "").toLowerCase();
-      const surname = (s.surname || "").toLowerCase();
-      const firstName = (s.first_name || "").toLowerCase();
-      const middleName = (s.middle_name || "").toLowerCase();
-      const fullName = `${surname} ${firstName} ${middleName}`.toLowerCase();
-      const desig = (s.designation?.name || "").toLowerCase();
-      const cadre = (s.designation?.cadre_name || "").toLowerCase();
-      const station = (s.current_station || "").toLowerCase();
-      const dept = (s.department?.name || "").toLowerCase();
-      const deptCode = (s.department?.code || "").toLowerCase();
-      const fileNo = (s.file_number || "").toLowerCase();
-      const qual = (s.qualification || "").toLowerCase();
-      const lga = (s.lga_of_origin || "").toLowerCase();
-
-      if (searchField === "ogun_no") {
-        return ogNo.includes(term) || staffNo.includes(term);
-      }
-      if (searchField === "name") {
-        return fullName.includes(term) || surname.includes(term) || firstName.includes(term);
-      }
-      if (searchField === "cadre") {
-        return cadre.includes(term) || desig.includes(term);
-      }
-      if (searchField === "station") {
-        return station.includes(term);
-      }
-      // "all" fields
-      return (
-        ogNo.includes(term) ||
-        staffNo.includes(term) ||
-        fullName.includes(term) ||
-        cadre.includes(term) ||
-        desig.includes(term) ||
-        station.includes(term) ||
-        dept.includes(term) ||
-        deptCode.includes(term) ||
-        fileNo.includes(term) ||
-        qual.includes(term) ||
-        lga.includes(term)
-      );
-    });
-  }, [staffList, search, searchField]);
-
-  // Filtered staff list for the comprehensive Staff List section (including posted/seconded staff)
-  const filteredStaffRegistry = useMemo(() => {
-    return displayNominalRoll.filter((s) => {
-      const cadre = s.designation?.cadre_name || "";
-      const desig = s.designation?.name || "";
-      if (staffListCadreFilter === "POSTED") {
-        return s.status?.code === "POSTED" || (s.current_station && s.current_station.includes("Posted"));
-      }
-      if (staffListCadreFilter === "ACTIVE") {
-        return s.status?.code === "ACTIVE" && (!s.current_station || !s.current_station.includes("Posted"));
-      }
-      if (staffListCadreFilter === "PROGRAM_ANALYST") {
-        return cadre.includes("Program") || desig.includes("Program") || desig.includes("Software");
-      }
-      if (staffListCadreFilter === "DATA_PROCESSING") {
-        return cadre.includes("Data Processing") || desig.includes("Data Processing");
-      }
-      if (staffListCadreFilter === "ADMIN_OFFICER") {
-        return cadre.includes("Administrative") || desig.includes("Admin");
-      }
-      if (staffListCadreFilter === "EXECUTIVE_GD") {
-        return cadre.includes("Executive Officer (GD)") || desig.includes("(GD)");
-      }
-      if (staffListCadreFilter === "ACCOUNTANT") {
-        return cadre.includes("Accountant") || desig.includes("Accountant");
-      }
-      if (staffListCadreFilter === "EXECUTIVE_AC") {
-        return cadre.includes("Executive Officer (A/C)") || desig.includes("(Accounts)");
-      }
-      if (staffListCadreFilter === "CONFIDENTIAL_SEC") {
-        return cadre.includes("Confidential") || desig.includes("Secretary");
-      }
-      if (staffListCadreFilter === "SPECIAL_APPOINTEES") {
-        return cadre.includes("Special") || s.grade_level?.name === "CON";
-      }
-      return true;
-    });
-  }, [displayNominalRoll, staffListCadreFilter]);
+  const displayNominalRoll = staffList;
+  const filteredStaffRegistry = staffList;
 
   // Dynamic Units for selected Department
   const filteredUnits = useMemo(() => {
@@ -457,7 +403,7 @@ export default function App() {
     setFormData({
       ...initialFormState,
       department_id: defaultDept,
-      staff_number: `BIT/EMP/00${staffList.length + 10}`,
+      staff_number: "",
     });
     setIsFormModalOpen(true);
   };
@@ -576,6 +522,30 @@ export default function App() {
     }
   };
 
+  const staffControls = (
+    <div className="space-y-3 no-print">
+      <div className="flex flex-wrap items-center gap-2">
+        {activeTab !== "nominal_roll" && <>
+          {!permissions.isDeptRestricted && <select aria-label="Filter by department" value={selectedDept} onChange={(event) => setSelectedDept(event.target.value)} className="px-3 py-2 border border-slate-300 rounded text-xs max-w-full">
+            <option value="">All departments</option>
+            {lookups.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+          </select>}
+          <select aria-label="Filter by grade" value={selectedGrade} onChange={(event) => setSelectedGrade(event.target.value)} className="px-3 py-2 border border-slate-300 rounded text-xs">
+            <option value="">All grades</option>
+            {lookups.grade_levels.map((grade) => <option key={grade.id} value={grade.id}>{grade.name}</option>)}
+          </select>
+        </>}
+        <select aria-label="Filter by employment status" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)} className="px-3 py-2 border border-slate-300 rounded text-xs max-w-full">
+          <option value="">All employment statuses</option>
+          {lookups.statuses.map((status) => <option key={status.id} value={status.code}>{status.name}</option>)}
+        </select>
+        <button type="button" onClick={resetStaffFilters} className="px-3 py-2 border border-slate-300 rounded text-xs hover:bg-slate-50">Reset filters</button>
+      </div>
+      <QuickFilters options={STAFF_QUICK_FILTERS} value={staffListCadreFilter} onChange={(value) => { setStaffListCadreFilter(value); setSelectedStatus(""); }} label="Staff quick filters" />
+    </div>
+  );
+  const staffPagination = <Pagination page={staffMeta.current_page} lastPage={staffMeta.last_page} total={staffMeta.total} perPage={staffPerPage} onPage={setStaffPage} onPerPage={setStaffPerPage} loading={loading} />;
+
   const navItems = [
     {
       key: "dashboard",
@@ -676,7 +646,7 @@ export default function App() {
             onClick={() => setIsMobileMenuOpen(false)}
             className="lg:hidden text-slate-400 hover:text-white p-1 text-sm font-bold"
           >
-            ✕
+            <X size={18} aria-label="Close navigation" />
           </button>
         </div>
 
@@ -904,7 +874,7 @@ export default function App() {
           >
             <span>{feedback.message}</span>
             <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600 font-bold ml-4">
-              ✕
+              <X size={16} aria-label="Dismiss notification" />
             </button>
           </div>
         )}
@@ -925,7 +895,7 @@ export default function App() {
                   </p>
                 </div>
                 <div className="text-xs font-mono font-bold text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs inline-flex items-center gap-1.5 self-start sm:self-auto">
-                  <span>📅</span>
+                  <CalendarDays size={16} />
                   <span>{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
               </div>
@@ -934,7 +904,7 @@ export default function App() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
                   <div className="text-xs text-slate-500 font-medium">Total Staff Employed</div>
-                  <div className="text-2xl font-bold text-emerald-700 mt-1">{staffList.length}</div>
+                  <div className="text-2xl font-bold text-emerald-700 mt-1">{stats?.summary?.active_staff || 0}</div>
                   <div className="text-[10px] text-slate-400 mt-1">Across all cadres (HQ & Posted to MDAs)</div>
                 </div>
 
@@ -956,8 +926,9 @@ export default function App() {
                 <h3 className="text-sm font-bold text-slate-800 mb-4">Staff Distribution Across Departments</h3>
                 <div className="space-y-3">
                   {lookups.departments.map((dept) => {
-                    const count = staffList.filter((s) => s.department_id === dept.id).length;
-                    const percent = staffList.length > 0 ? Math.round((count / staffList.length) * 100) : 0;
+                    const count = Number(stats?.by_department?.[dept.id] || 0);
+                    const total = stats?.summary?.active_staff || 0;
+                    const percent = total > 0 ? Math.round((count / total) * 100) : 0;
                     return (
                       <div key={dept.id} className="space-y-1">
                         <div className="flex justify-between text-xs">
@@ -1050,11 +1021,11 @@ export default function App() {
                       className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-700 font-medium focus:ring-1 focus:ring-emerald-600 focus:outline-none cursor-pointer"
                       title="Select field to search by"
                     >
-                      <option value="all">🔍 All Fields</option>
-                      <option value="ogun_no">🎫 OG No / Staff ID</option>
-                      <option value="name">👤 Officer Name</option>
-                      <option value="cadre">💼 Cadre / Designation</option>
-                      <option value="station">📍 Posting Station</option>
+                      <option value="all">All Fields</option>
+                      <option value="ogun_no">OG No / Staff ID</option>
+                      <option value="name">Officer Name</option>
+                      <option value="cadre">Cadre / Designation</option>
+                      <option value="station">Posting Station</option>
                     </select>
 
                     <div className="relative flex-1 sm:w-44">
@@ -1078,7 +1049,7 @@ export default function App() {
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
                           title="Clear search"
                         >
-                          ✕
+                          <X size={14} />
                         </button>
                       )}
                     </div>
@@ -1089,7 +1060,7 @@ export default function App() {
                     className="px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded hover:bg-slate-900 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
                     title="Print or Save as Landscape PDF"
                   >
-                    <span>🖨️</span>
+                    <Printer size={16} />
                     <span>Print / Save PDF</span>
                   </button>
 
@@ -1102,7 +1073,7 @@ export default function App() {
                     })}
                     className="px-3 py-1.5 bg-emerald-800 text-white text-xs font-semibold rounded hover:bg-emerald-900 transition-colors shadow-xs"
                   >
-                    ⬇ Export CSV
+                    <Download size={14} className="inline-block mr-1" /> Export CSV
                   </button>
 
                   {permissions.canImport && (
@@ -1112,7 +1083,7 @@ export default function App() {
                       className="px-3 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded hover:bg-slate-800 transition-colors shadow-xs flex items-center gap-1"
                       title="Download Official CSV Template for Staff Import"
                     >
-                      <span>📥</span>
+                      <Download size={16} />
                       <span>CSV Template</span>
                     </button>
                   )}
@@ -1129,6 +1100,7 @@ export default function App() {
               </div>
 
               {/* Official Nominal Roll Table (Responsive with Horizontal Scroll) */}
+              {staffControls}
               <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[1300px]">
                   <thead>
@@ -1164,7 +1136,7 @@ export default function App() {
                     ) : (
                       displayNominalRoll.map((staff, index) => (
                         <tr key={staff.id} className="hover:bg-emerald-50/40 transition-colors">
-                          <td className="py-2.5 px-3 font-mono text-center text-slate-500 font-bold">{index + 1}</td>
+                          <td className="py-2.5 px-3 font-mono text-center text-slate-500 font-bold">{(staffMeta.current_page - 1) * staffPerPage + index + 1}</td>
                           <td className="py-2.5 px-3 font-medium text-slate-800">
                             {staff.designation?.name}
                             {staff.designation?.cadre_name && (
@@ -1195,7 +1167,7 @@ export default function App() {
                           <td className="py-2.5 px-3 text-slate-700">
                             {staff.current_station && staff.current_station.includes("Posted") ? (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
-                                📍 {staff.current_station}
+                                <MapPin size={12} className="inline-block mr-1" /> {staff.current_station}
                               </span>
                             ) : (
                               <span className="text-[11px] text-slate-700 font-medium">
@@ -1238,6 +1210,7 @@ export default function App() {
               </div>
 
               {/* Official 3-Tier Civil Service Signature & Endorsement Block */}
+              {staffPagination}
               <div className="hidden print:block mt-8 pt-4 border-t border-slate-400 page-break-inside-avoid">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-3 text-center">
                   Official Statutory Verification & Approval Endorsement Block
@@ -1320,11 +1293,11 @@ export default function App() {
                       className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-700 font-medium focus:ring-1 focus:ring-emerald-600 focus:outline-none cursor-pointer"
                       title="Select field to search by"
                     >
-                      <option value="all">🔍 All Fields</option>
-                      <option value="ogun_no">🎫 OG No / Staff ID</option>
-                      <option value="name">👤 Officer Name</option>
-                      <option value="cadre">💼 Cadre / Designation</option>
-                      <option value="station">📍 Posting Station</option>
+                      <option value="all">All Fields</option>
+                      <option value="ogun_no">OG No / Staff ID</option>
+                      <option value="name">Officer Name</option>
+                      <option value="cadre">Cadre / Designation</option>
+                      <option value="station">Posting Station</option>
                     </select>
 
                     <div className="relative flex-1 sm:w-44">
@@ -1348,14 +1321,14 @@ export default function App() {
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
                           title="Clear search"
                         >
-                          ✕
+                          <X size={14} />
                         </button>
                       )}
                     </div>
                   </div>
 
                   <span className="text-xs font-bold bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded border border-emerald-200">
-                    Total: {filteredStaffRegistry.length}
+                    Total: {staffMeta.total}
                   </span>
 
                   {permissions.canImport && (
@@ -1365,7 +1338,7 @@ export default function App() {
                       className="px-3 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded hover:bg-slate-800 transition-colors shadow-xs flex items-center gap-1"
                       title="Download Official CSV Template for Staff Import"
                     >
-                      <span>📥</span>
+                      <Download size={16} />
                       <span>CSV Template</span>
                     </button>
                   )}
@@ -1375,40 +1348,14 @@ export default function App() {
                     className="px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded hover:bg-slate-900 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
                     title="Print or Save as Landscape PDF"
                   >
-                    <span>🖨️</span>
+                    <Printer size={16} />
                     <span>Print / Save PDF</span>
                   </button>
                 </div>
               </div>
 
               {/* Quick Filter Cadre Pills Matching Official Cadres */}
-              <div className="flex flex-wrap gap-1.5 text-xs no-print">
-                {[
-                  { key: "ALL", label: "All Bureau Officers" },
-                  { key: "PROGRAM_ANALYST", label: "Program Analyst Cadre" },
-                  { key: "DATA_PROCESSING", label: "Data Processing Cadre" },
-                  { key: "ADMIN_OFFICER", label: "Admin Officer Cadre" },
-                  { key: "EXECUTIVE_GD", label: "Executive Officer (GD)" },
-                  { key: "ACCOUNTANT", label: "Accountant Cadre" },
-                  { key: "EXECUTIVE_AC", label: "Executive Officer (A/C)" },
-                  { key: "CONFIDENTIAL_SEC", label: "Confidential Secretary" },
-                  { key: "SPECIAL_APPOINTEES", label: "Special Appointees" },
-                  { key: "POSTED", label: "📍 Posted to MDAs" },
-                  { key: "ACTIVE", label: "🏛 Active at BIT HQ" },
-                ].map((pill) => (
-                  <button
-                    key={pill.key}
-                    onClick={() => setStaffListCadreFilter(pill.key)}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
-                      staffListCadreFilter === pill.key
-                        ? "bg-emerald-700 text-white shadow-xs"
-                        : "bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    {pill.label}
-                  </button>
-                ))}
-              </div>
+              {staffControls}
 
               {/* Staff Registry Table - Matches media_1790776503680.jpg */}
               <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-x-auto">
@@ -1429,7 +1376,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
-                    {filteredStaffRegistry.length === 0 ? (
+                    {loading ? <tr><td colSpan="11" className="py-8 text-center text-slate-400">Loading staff records...</td></tr> : filteredStaffRegistry.length === 0 ? (
                       <tr>
                         <td colSpan="11" className="py-8 text-center text-slate-400">
                           No officers found matching the selected cadre or posting filter.
@@ -1438,7 +1385,7 @@ export default function App() {
                     ) : (
                       filteredStaffRegistry.map((staff, index) => (
                         <tr key={staff.id} className="hover:bg-emerald-50/40 transition-colors">
-                          <td className="py-2.5 px-3 font-mono text-center text-slate-500 font-bold">{index + 1}</td>
+                          <td className="py-2.5 px-3 font-mono text-center text-slate-500 font-bold">{(staffMeta.current_page - 1) * staffPerPage + index + 1}</td>
                           <td className="py-2.5 px-3 font-black text-slate-900 uppercase">
                             {staff.surname}
                           </td>
@@ -1463,7 +1410,7 @@ export default function App() {
                           <td className="py-2.5 px-3">
                             {staff.current_station && staff.current_station.includes("Posted") ? (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
-                                📍 {staff.current_station}
+                                <MapPin size={12} className="inline-block mr-1" /> {staff.current_station}
                               </span>
                             ) : (
                               <span className="text-[11px] text-slate-700 font-medium">
@@ -1537,11 +1484,11 @@ export default function App() {
                     className="px-2 py-1.5 border border-slate-300 rounded text-xs bg-white text-slate-700 font-medium focus:ring-1 focus:ring-emerald-600 focus:outline-none cursor-pointer"
                     title="Select field to search by"
                   >
-                    <option value="all">🔍 All Fields</option>
-                    <option value="ogun_no">🎫 OG No / Staff ID</option>
-                    <option value="name">👤 Officer Name</option>
-                    <option value="cadre">💼 Cadre / Designation</option>
-                    <option value="station">📍 Posting Station</option>
+                    <option value="all">All Fields</option>
+                    <option value="ogun_no">OG No / Staff ID</option>
+                    <option value="name">Officer Name</option>
+                    <option value="cadre">Cadre / Designation</option>
+                    <option value="station">Posting Station</option>
                   </select>
 
                   <div className="relative flex-1 sm:w-48">
@@ -1565,14 +1512,15 @@ export default function App() {
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
                         title="Clear search"
                       >
-                        ✕
+                        <X size={14} />
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              {displayNominalRoll.length === 0 ? (
+              {staffControls}
+              {loading ? <div className="py-8 text-center text-slate-400 text-xs">Loading directory cards...</div> : displayNominalRoll.length === 0 ? (
                 <div className="bg-white p-8 rounded-lg border border-slate-200 text-center text-slate-400 text-xs">
                   No directory cards found matching query criteria {search && `("${search}")`}.
                 </div>
@@ -1612,6 +1560,8 @@ export default function App() {
             </div>
           )}
 
+          {["staff_list", "directory"].includes(activeTab) && staffPagination}
+
           {/* TAB: MILESTONES & STATUTORY EXIT ALERTS */}
           {activeTab === "milestones" && (
             <MilestoneAlerts
@@ -1644,7 +1594,7 @@ export default function App() {
                     onClick={() => downloadCsv("template", "BIT_Nominal_Roll_Template.csv")}
                     className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded hover:bg-emerald-800 shadow-xs shrink-0"
                   >
-                    ⬇ Download Template (.csv)
+                    <Download size={14} className="inline-block mr-1" /> Download Template (.csv)
                   </button>
                 </div>
 
@@ -1695,7 +1645,10 @@ export default function App() {
                   </p>
 
                   {importResult.errors && importResult.errors.length > 0 && (
-                    <div className="mt-4 bg-white rounded border border-rose-200 overflow-x-auto">
+                    <div className="mt-4 space-y-3">
+                      <RecordFilters search={importRecords.search} onSearch={importRecords.setSearch} onReset={importRecords.reset} label="Search import errors" />
+                      <QuickFilters options={[{ key: "", label: "All errors" }, { key: "already", label: "Duplicates" }, { key: "required", label: "Required fields" }, { key: "Unknown", label: "Unknown references" }]} value={importRecords.filter} onChange={importRecords.setFilter} label="Import error quick filters" />
+                    <div className="bg-white rounded border border-rose-200 overflow-x-auto">
                       <table className="w-full text-left text-xs min-w-[500px]">
                         <thead>
                           <tr className="bg-rose-100/70 text-rose-900 font-semibold border-b border-rose-200">
@@ -1706,7 +1659,8 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-slate-700">
-                          {importResult.errors.map((err, i) => (
+                          {importRecords.rows.length === 0 && <tr><td colSpan="4" className="py-6 text-center text-slate-500">No matching errors.</td></tr>}
+                          {importRecords.rows.map((err, i) => (
                             <tr key={i} className="hover:bg-rose-50/50">
                               <td className="py-2 px-3 font-bold text-rose-800">Row {err.row}</td>
                               <td className="py-2 px-3 font-mono">{err.staff_number}</td>
@@ -1722,6 +1676,8 @@ export default function App() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <Pagination page={importRecords.page} lastPage={importRecords.lastPage} total={importRecords.total} perPage={importRecords.perPage} onPage={importRecords.onPage} onPerPage={importRecords.setPerPage} />
                     </div>
                   )}
                 </div>
@@ -1740,19 +1696,19 @@ export default function App() {
                   </p>
                 </div>
                 <button
-                  onClick={fetchAuditLogs}
+                  onClick={() => fetchAuditLogs(auditPage)}
                   className="px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded hover:bg-slate-900"
                 >
-                  🔄 Refresh Logs
+                  <RefreshCw size={14} className="inline-block mr-1.5" /> Refresh Logs
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 bg-white border border-slate-200 rounded-lg p-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-2 bg-white border border-slate-200 rounded-lg p-3">
                 <input
                   type="search"
                   value={auditFilters.search}
                   onChange={(event) => updateAuditFilter("search", event.target.value)}
-                  placeholder="Search username, IP, action, record..."
+                  placeholder="Search name, username, IP, action..."
                   aria-label="Search audit logs"
                   className="xl:col-span-2 px-3 py-2 border border-slate-300 rounded text-xs"
                 />
@@ -1764,22 +1720,25 @@ export default function App() {
                   <option value="">All modules</option>
                   {auditMeta.modules.map((module) => <option key={module} value={module}>{module}</option>)}
                 </select>
-                <div className="flex gap-2">
-                  <label className="flex-1 text-[10px] text-slate-500">From
-                    <input type="date" value={auditFilters.from} onChange={(event) => updateAuditFilter("from", event.target.value)} className="block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-slate-800" />
+                <div className="flex gap-2 min-w-0 xl:col-span-2">
+                  <label className="flex-1 min-w-0 text-[10px] text-slate-500">From
+                    <input type="date" value={auditFilters.from} onChange={(event) => updateAuditFilter("from", event.target.value)} className="block w-full min-w-0 px-2 py-1.5 border border-slate-300 rounded text-xs text-slate-800" />
                   </label>
-                  <label className="flex-1 text-[10px] text-slate-500">To
-                    <input type="date" value={auditFilters.to} onChange={(event) => updateAuditFilter("to", event.target.value)} className="block w-full px-2 py-1.5 border border-slate-300 rounded text-xs text-slate-800" />
+                  <label className="flex-1 min-w-0 text-[10px] text-slate-500">To
+                    <input type="date" value={auditFilters.to} onChange={(event) => updateAuditFilter("to", event.target.value)} className="block w-full min-w-0 px-2 py-1.5 border border-slate-300 rounded text-xs text-slate-800" />
                   </label>
                 </div>
               </div>
 
+              <QuickFilters options={[{ key: "", label: "All actions" }, ...auditMeta.actions.map((action) => ({ key: action, label: action.replaceAll("_", " ") }))]} value={auditFilters.action} onChange={(value) => updateAuditFilter("action", value)} label="Audit action quick filters" />
+              <button type="button" onClick={() => { setAuditFilters({ search: "", action: "", module: "", from: "", to: "" }); setAuditPage(1); }} className="text-xs text-emerald-700 font-semibold">Reset filters</button>
               <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[650px]">
+                <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase border-b border-slate-200">
                       <th className="py-3 px-4">Timestamp</th>
                       <th className="py-3 px-4">User</th>
+                      <th className="py-3 px-4">User Name</th>
                       <th className="py-3 px-4">Action</th>
                       <th className="py-3 px-4">Module</th>
                       <th className="py-3 px-4">IP Address</th>
@@ -1789,11 +1748,11 @@ export default function App() {
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {auditLoading ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-slate-400">Loading audit history...</td>
+                        <td colSpan="7" className="py-8 text-center text-slate-400">Loading audit history...</td>
                       </tr>
                     ) : auditLogs.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-slate-400">No audit logs recorded yet.</td>
+                        <td colSpan="7" className="py-8 text-center text-slate-400">No matching audit logs.</td>
                       </tr>
                     ) : (
                       auditLogs.map((log) => (
@@ -1802,6 +1761,7 @@ export default function App() {
                             {log.created_at ? new Date(log.created_at).toLocaleString() : "N/A"}
                           </td>
                           <td className="py-3 px-4 font-semibold text-slate-800">{log.username || "Unknown"}</td>
+                          <td className="py-3 px-4 text-slate-700">{log.user?.name || (log.username === "SYSTEM" ? "System" : "Not available")}</td>
                           <td className="py-3 px-4">
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -1833,30 +1793,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
-                <span>
-                  {auditMeta.total === 0 ? "No matching records" : `Showing ${(auditMeta.current_page - 1) * 25 + 1}-${Math.min(auditMeta.current_page * 25, auditMeta.total)} of ${auditMeta.total} records`}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
-                    disabled={auditPage <= 1 || auditLoading}
-                    className="px-3 py-1.5 border border-slate-300 rounded disabled:opacity-40"
-                  >
-                    Previous
-                  </button>
-                  <span>Page {auditMeta.current_page} of {auditMeta.last_page}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAuditPage((page) => Math.min(auditMeta.last_page, page + 1))}
-                    disabled={auditPage >= auditMeta.last_page || auditLoading}
-                    className="px-3 py-1.5 border border-slate-300 rounded disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+              <Pagination page={auditMeta.current_page} lastPage={auditMeta.last_page} total={auditMeta.total} perPage={auditPerPage} onPage={setAuditPage} onPerPage={(value) => { setAuditPerPage(value); setAuditPage(1); }} loading={auditLoading} />
             </div>
           )}
         </div>
@@ -1876,7 +1813,7 @@ export default function App() {
                 </p>
               </div>
               <button onClick={() => setIsFormModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold p-1">
-                ✕
+                <X size={18} aria-label="Close staff form" />
               </button>
             </div>
 
@@ -2250,7 +2187,7 @@ export default function App() {
                 onClick={() => setSelectedStaff(null)}
                 className="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer"
               >
-                ✕
+                <X size={18} aria-label="Close staff profile" />
               </button>
             </div>
 
@@ -2265,7 +2202,7 @@ export default function App() {
                     : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                 }`}
               >
-                <span>📋</span>
+                <ClipboardList size={16} />
                 <span>Civil Service Particulars</span>
               </button>
               <button
@@ -2277,7 +2214,7 @@ export default function App() {
                     : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                 }`}
               >
-                <span>📍</span>
+                <MapPin size={16} />
                 <span>Postings & Deployments</span>
               </button>
               <button
@@ -2289,7 +2226,7 @@ export default function App() {
                     : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                 }`}
               >
-                <span>📁</span>
+                <Folder size={16} />
                 <span>Digital Personnel Folder</span>
               </button>
             </div>
@@ -2350,9 +2287,9 @@ export default function App() {
                   <span className="text-[10px] text-slate-500 block uppercase font-bold">Current Station / Posting Location</span>
                   <span className="text-xs font-semibold text-slate-800">
                     {selectedStaff.current_station && selectedStaff.current_station.includes("Posted") ? (
-                      <span className="text-amber-900 font-bold">📍 {selectedStaff.current_station}</span>
+                      <span className="text-amber-900 font-bold"><MapPin size={14} className="inline-block mr-1" /> {selectedStaff.current_station}</span>
                     ) : (
-                      <span>🏛 {selectedStaff.current_station || "BIT Headquarters, Ogun Tech Hub, Kobape Road, Kobape, Abeokuta"}</span>
+                      <span><Building2 size={14} className="inline-block mr-1" /> {selectedStaff.current_station || "BIT Headquarters, Ogun Tech Hub, Kobape Road, Kobape, Abeokuta"}</span>
                     )}
                   </span>
                   {selectedStaff.remarks && (
@@ -2419,7 +2356,7 @@ export default function App() {
                   {auditDetail.action} by {auditDetail.username} on {new Date(auditDetail.created_at).toLocaleString()}
                 </p>
               </div>
-              <button onClick={() => setAuditDetail(null)} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+              <button onClick={() => setAuditDetail(null)} title="Close audit details" aria-label="Close audit details" className="text-slate-400 hover:text-slate-600 font-bold p-1"><X size={18} /></button>
             </div>
 
             <div className="space-y-3 text-xs">

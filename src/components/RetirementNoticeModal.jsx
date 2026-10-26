@@ -1,4 +1,5 @@
 import React from "react";
+import { Printer } from "lucide-react";
 
 export default function RetirementNoticeModal({ isOpen, onClose, noticeData }) {
   if (!isOpen || !noticeData) return null;
@@ -27,7 +28,7 @@ export default function RetirementNoticeModal({ isOpen, onClose, noticeData }) {
               onClick={handlePrint}
               className="px-3 py-1.5 bg-emerald-700 text-white rounded text-xs font-semibold hover:bg-emerald-800 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
             >
-              <span>🖨️</span>
+              <Printer size={16} />
               <span>Print Letter (PDF)</span>
             </button>
             <button

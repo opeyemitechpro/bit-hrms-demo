@@ -17,6 +17,11 @@ export default defineConfig({
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
         xfwd: true,
+        configure(proxy) {
+          proxy.on("proxyReq", (proxyRequest, request) => {
+            proxyRequest.setHeader("X-Forwarded-For", request.socket.remoteAddress || "127.0.0.1");
+          });
+        },
       },
     },
   },

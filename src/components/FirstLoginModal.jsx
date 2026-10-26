@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { TriangleAlert } from "lucide-react";
 
 export default function FirstLoginModal({ currentUser, onComplete, apiBase }) {
   const [formData, setFormData] = useState({
@@ -83,7 +84,7 @@ export default function FirstLoginModal({ currentUser, onComplete, apiBase }) {
 
         {error && (
           <div className="mb-5 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-start gap-2">
-            <span>⚠️</span>
+            <span aria-hidden="true"><TriangleAlert size={16} /></span>
             <span>{error}</span>
           </div>
         )}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import RetirementNoticeModal from "./RetirementNoticeModal";
+import { Pagination, QuickFilters, RecordFilters, useRecordPage } from "./RecordControls";
+import { ClipboardList, FileText, Hourglass, RefreshCw, TriangleAlert } from "lucide-react";
 
 export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,8 @@ export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
 
   const counts = data?.counts || { confirmation_due: 0, retirements_12m: 0, retirements_6m: 0, retirements_3m: 0, overdue: 0 };
   const currentList = data ? data[activeSubTab] || [] : [];
+  const records = useRecordPage(currentList, activeSubTab);
+  const departmentFilters = [...new Map(currentList.filter((staff) => staff.department?.code).map((staff) => [staff.department.code, { key: staff.department.code, label: staff.department.code }])).values()];
 
   return (
     <div className="space-y-6">
@@ -65,7 +69,7 @@ export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
           onClick={fetchMilestones}
           className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
         >
-          <span>🔄</span>
+          <RefreshCw size={15} />
           <span>Refresh Engine</span>
         </button>
       </div>
@@ -131,16 +135,23 @@ export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
       </div>
 
       {/* Tab Table */}
+      <RecordFilters search={records.search} onSearch={records.setSearch} onReset={records.reset} label="Search milestone records">
+        <select aria-label="Milestone department" value={records.filter} onChange={(event) => records.setFilter(event.target.value)} className="px-3 py-2 border border-slate-300 rounded text-xs max-w-full">
+          <option value="">All departments</option>
+          {departmentFilters.map((department) => <option key={department.key} value={department.key}>{department.label}</option>)}
+        </select>
+      </RecordFilters>
+      <QuickFilters options={[{ key: "confirmation_due", label: "Confirmation due" }, { key: "retirements_12m", label: "Retirements within 12 months" }, { key: "overdue", label: "Overdue exits" }]} value={activeSubTab} onChange={setActiveSubTab} label="Milestone quick filters" />
       <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
           <div className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
             <span>
-              {activeSubTab === "confirmation_due" && "📋 Officers Due for 2-Year Statutory Confirmation"}
-              {activeSubTab === "retirements_12m" && "⏳ Officers Due for Statutory Retirement (Next 12 Months)"}
-              {activeSubTab === "overdue" && "⚠️ Officers Overdue for Statutory Retirement"}
+              {activeSubTab === "confirmation_due" && <><ClipboardList size={15} className="inline-block mr-1" />Officers Due for 2-Year Statutory Confirmation</>}
+              {activeSubTab === "retirements_12m" && <><Hourglass size={15} className="inline-block mr-1" />Officers Due for Statutory Retirement (Next 12 Months)</>}
+              {activeSubTab === "overdue" && <><TriangleAlert size={15} className="inline-block mr-1" />Officers Overdue for Statutory Retirement</>}
             </span>
             <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded">
-              {currentList.length}
+              {records.total}
             </span>
           </div>
         </div>
@@ -168,16 +179,16 @@ export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-slate-400">Loading statutory alerts engine...</td>
                 </tr>
-              ) : currentList.length === 0 ? (
+              ) : records.total === 0 ? (
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-slate-400">
                     No officers currently flagged under this statutory category.
                   </td>
                 </tr>
               ) : (
-                currentList.map((staff, idx) => (
+                records.rows.map((staff, idx) => (
                   <tr key={staff.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-2.5 px-3 text-center font-mono text-slate-500 font-bold">{idx + 1}</td>
+                    <td className="py-2.5 px-3 text-center font-mono text-slate-500 font-bold">{(records.page - 1) * records.perPage + idx + 1}</td>
                     <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
                       {staff.ogun_employee_number || staff.staff_number}
                     </td>
@@ -217,7 +228,7 @@ export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
                         disabled={noticeLoading}
                         className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-semibold text-[11px] transition-colors"
                       >
-                        📜 Generate Notice
+                        <FileText size={14} className="inline-block mr-1" /> Generate Notice
                       </button>
                     </td>
                   </tr>
@@ -229,6 +240,7 @@ export default function MilestoneAlerts({ apiBase, onSelectStaff }) {
       </div>
 
       {/* Notice Letter Modal */}
+      <Pagination page={records.page} lastPage={records.lastPage} total={records.total} perPage={records.perPage} onPage={records.onPage} onPerPage={records.setPerPage} loading={loading} />
       <RetirementNoticeModal
         isOpen={Boolean(selectedNotice)}
         onClose={() => setSelectedNotice(null)}

@@ -28,33 +28,60 @@ class StaffController extends Controller
         $query = Staff::with(['department', 'unit', 'designation', 'gradeLevel', 'status']);
 
         if ($search = trim($request->input('search', ''))) {
-            $query->where(function ($q) use ($search) {
+            $field = $request->input('search_field', 'all');
+            $query->where(function ($q) use ($search, $field) {
+                if ($field === 'ogun_no') {
+                    $q->where('staff_number', 'LIKE', "%{$search}%")
+                        ->orWhere('ogun_employee_number', 'LIKE', "%{$search}%");
+                    return;
+                }
+                if ($field === 'name') {
+                    foreach (preg_split('/\s+/', $search) as $part) {
+                        $q->where(function ($names) use ($part) {
+                            $names->where('surname', 'LIKE', "%{$part}%")
+                                ->orWhere('first_name', 'LIKE', "%{$part}%")
+                                ->orWhere('middle_name', 'LIKE', "%{$part}%");
+                        });
+                    }
+                    return;
+                }
+                if ($field === 'station') {
+                    $q->where('current_station', 'LIKE', "%{$search}%");
+                    return;
+                }
+                if ($field === 'cadre') {
+                    $q->whereHas('designation', function ($designation) use ($search) {
+                        $designation->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('cadre_name', 'LIKE', "%{$search}%");
+                    });
+                    return;
+                }
                 $q->where('staff_number', 'LIKE', "%{$search}%")
-                  ->orWhere('ogun_employee_number', 'LIKE', "%{$search}%")
-                  ->orWhere('file_number', 'LIKE', "%{$search}%")
-                  ->orWhere('ippis_number', 'LIKE', "%{$search}%")
-                  ->orWhere('surname', 'LIKE', "%{$search}%")
-                  ->orWhere('first_name', 'LIKE', "%{$search}%")
-                  ->orWhere('middle_name', 'LIKE', "%{$search}%")
-                  ->orWhere('official_email', 'LIKE', "%{$search}%")
-                  ->orWhere('phone_number', 'LIKE', "%{$search}%")
-                  ->orWhere('qualification', 'LIKE', "%{$search}%")
-                  ->orWhere('lga_of_origin', 'LIKE', "%{$search}%")
-                  ->orWhere('state_of_origin', 'LIKE', "%{$search}%")
-                  ->orWhere('current_station', 'LIKE', "%{$search}%")
-                  ->orWhere('remarks', 'LIKE', "%{$search}%")
-                  ->orWhereHas('designation', function ($sub) use ($search) {
-                      $sub->where('name', 'LIKE', "%{$search}%")
-                          ->orWhere('code', 'LIKE', "%{$search}%")
-                          ->orWhere('cadre_name', 'LIKE', "%{$search}%");
-                  })
-                  ->orWhereHas('department', function ($sub) use ($search) {
-                      $sub->where('name', 'LIKE', "%{$search}%")
-                          ->orWhere('code', 'LIKE', "%{$search}%");
-                  })
-                  ->orWhereHas('gradeLevel', function ($sub) use ($search) {
-                      $sub->where('name', 'LIKE', "%{$search}%");
-                  });
+                    ->orWhere('ogun_employee_number', 'LIKE', "%{$search}%")
+                    ->orWhere('file_number', 'LIKE', "%{$search}%")
+                    ->orWhere('ippis_number', 'LIKE', "%{$search}%")
+                    ->orWhere('surname', 'LIKE', "%{$search}%")
+                    ->orWhere('first_name', 'LIKE', "%{$search}%")
+                    ->orWhere('middle_name', 'LIKE', "%{$search}%")
+                    ->orWhere('official_email', 'LIKE', "%{$search}%")
+                    ->orWhere('phone_number', 'LIKE', "%{$search}%")
+                    ->orWhere('qualification', 'LIKE', "%{$search}%")
+                    ->orWhere('lga_of_origin', 'LIKE', "%{$search}%")
+                    ->orWhere('state_of_origin', 'LIKE', "%{$search}%")
+                    ->orWhere('current_station', 'LIKE', "%{$search}%")
+                    ->orWhere('remarks', 'LIKE', "%{$search}%")
+                    ->orWhereHas('designation', function ($sub) use ($search) {
+                        $sub->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('code', 'LIKE', "%{$search}%")
+                            ->orWhere('cadre_name', 'LIKE', "%{$search}%");
+                    })
+                    ->orWhereHas('department', function ($sub) use ($search) {
+                        $sub->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('code', 'LIKE', "%{$search}%");
+                    })
+                    ->orWhereHas('gradeLevel', function ($sub) use ($search) {
+                        $sub->where('name', 'LIKE', "%{$search}%");
+                    });
             });
         }
 
@@ -70,8 +97,35 @@ class StaffController extends Controller
             $query->where('gender', $gender);
         }
 
-        $perPage = $request->input('per_page', 100);
-        $staff = $query->orderBy('grade_level_id', 'desc')->paginate($perPage);
+        if ($status = $request->input('status')) {
+            $query->whereHas('status', fn($statusQuery) => $statusQuery->where('code', $status));
+        }
+
+        $quickFilter = $request->input('quick_filter', 'ALL');
+        if (in_array($quickFilter, ['ACTIVE', 'POSTED'], true)) {
+            $query->whereHas('status', fn($statusQuery) => $statusQuery->where('code', $quickFilter));
+        } elseif ($quickFilter === 'SPECIAL_APPOINTEES') {
+            $query->where(function ($special) {
+                $special->whereHas('designation', fn($designation) => $designation->where('cadre_name', 'LIKE', '%Special%'))
+                    ->orWhereHas('gradeLevel', fn($grade) => $grade->where('name', 'CON'));
+            });
+        } else {
+            $cadres = [
+                'PROGRAM_ANALYST' => 'Programme Analyst Officer Cadre',
+                'DATA_PROCESSING' => 'Data Processing Officer Cadre',
+                'ADMIN_OFFICER' => 'Administrative Officer Cadre',
+                'EXECUTIVE_GD' => 'Executive Officer (GD) Cadre',
+                'ACCOUNTANT' => 'Accountant Officer Cadre',
+                'EXECUTIVE_AC' => 'Executive Officer (A/C) Cadre',
+                'CONFIDENTIAL_SEC' => 'Confidential Secretary Officer Cadre',
+            ];
+            if (isset($cadres[$quickFilter])) {
+                $query->whereHas('designation', fn($designation) => $designation->where('cadre_name', $cadres[$quickFilter]));
+            }
+        }
+
+        $perPage = max(1, min(100, (int) $request->input('per_page', 25)));
+        $staff = $query->orderBy('grade_level_id', 'desc')->orderBy('id')->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -215,31 +269,31 @@ class StaffController extends Controller
         if ($search = trim($request->input('search', ''))) {
             $query->where(function ($q) use ($search) {
                 $q->where('staff_number', 'LIKE', "%{$search}%")
-                  ->orWhere('ogun_employee_number', 'LIKE', "%{$search}%")
-                  ->orWhere('file_number', 'LIKE', "%{$search}%")
-                  ->orWhere('ippis_number', 'LIKE', "%{$search}%")
-                  ->orWhere('surname', 'LIKE', "%{$search}%")
-                  ->orWhere('first_name', 'LIKE', "%{$search}%")
-                  ->orWhere('middle_name', 'LIKE', "%{$search}%")
-                  ->orWhere('official_email', 'LIKE', "%{$search}%")
-                  ->orWhere('phone_number', 'LIKE', "%{$search}%")
-                  ->orWhere('qualification', 'LIKE', "%{$search}%")
-                  ->orWhere('lga_of_origin', 'LIKE', "%{$search}%")
-                  ->orWhere('state_of_origin', 'LIKE', "%{$search}%")
-                  ->orWhere('current_station', 'LIKE', "%{$search}%")
-                  ->orWhere('remarks', 'LIKE', "%{$search}%")
-                  ->orWhereHas('designation', function ($sub) use ($search) {
-                      $sub->where('name', 'LIKE', "%{$search}%")
-                          ->orWhere('code', 'LIKE', "%{$search}%")
-                          ->orWhere('cadre_name', 'LIKE', "%{$search}%");
-                  })
-                  ->orWhereHas('department', function ($sub) use ($search) {
-                      $sub->where('name', 'LIKE', "%{$search}%")
-                          ->orWhere('code', 'LIKE', "%{$search}%");
-                  })
-                  ->orWhereHas('gradeLevel', function ($sub) use ($search) {
-                      $sub->where('name', 'LIKE', "%{$search}%");
-                  });
+                    ->orWhere('ogun_employee_number', 'LIKE', "%{$search}%")
+                    ->orWhere('file_number', 'LIKE', "%{$search}%")
+                    ->orWhere('ippis_number', 'LIKE', "%{$search}%")
+                    ->orWhere('surname', 'LIKE', "%{$search}%")
+                    ->orWhere('first_name', 'LIKE', "%{$search}%")
+                    ->orWhere('middle_name', 'LIKE', "%{$search}%")
+                    ->orWhere('official_email', 'LIKE', "%{$search}%")
+                    ->orWhere('phone_number', 'LIKE', "%{$search}%")
+                    ->orWhere('qualification', 'LIKE', "%{$search}%")
+                    ->orWhere('lga_of_origin', 'LIKE', "%{$search}%")
+                    ->orWhere('state_of_origin', 'LIKE', "%{$search}%")
+                    ->orWhere('current_station', 'LIKE', "%{$search}%")
+                    ->orWhere('remarks', 'LIKE', "%{$search}%")
+                    ->orWhereHas('designation', function ($sub) use ($search) {
+                        $sub->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('code', 'LIKE', "%{$search}%")
+                            ->orWhere('cadre_name', 'LIKE', "%{$search}%");
+                    })
+                    ->orWhereHas('department', function ($sub) use ($search) {
+                        $sub->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('code', 'LIKE', "%{$search}%");
+                    })
+                    ->orWhereHas('gradeLevel', function ($sub) use ($search) {
+                        $sub->where('name', 'LIKE', "%{$search}%");
+                    });
             });
         }
         if ($dept = $request->input('department_id')) {
@@ -258,9 +312,9 @@ class StaffController extends Controller
 
         return response()->stream(function () use ($staff) {
             $handle = fopen('php://output', 'w');
-            
+
             // Add UTF-8 BOM for Microsoft Excel compatibility
-            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
             // Header row
             fputcsv($handle, [
@@ -339,7 +393,7 @@ class StaffController extends Controller
 
         return response()->stream(function () {
             $handle = fopen('php://output', 'w');
-            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
             fputcsv($handle, [
                 'staff_number',
@@ -406,7 +460,7 @@ class StaffController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $path = $file->getRealPath();
-            
+
             $rows = [];
             if (($handle = fopen($path, 'r')) !== false) {
                 $header = fgetcsv($handle);

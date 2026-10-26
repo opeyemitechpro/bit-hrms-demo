@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { X } from "lucide-react";
 
 export default function ChangePasswordModal({ isOpen, onClose, onSuccess, apiBase }) {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -70,7 +71,7 @@ export default function ChangePasswordModal({ isOpen, onClose, onSuccess, apiBas
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-md"
           >
-            ✕
+            <X size={18} aria-label="Close password dialog" />
           </button>
         </div>
 

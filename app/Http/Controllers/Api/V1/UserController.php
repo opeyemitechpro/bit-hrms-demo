@@ -19,9 +19,19 @@ class UserController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $users = User::with(['role', 'department'])
-            ->orderBy('id', 'desc')
-            ->paginate($request->integer('per_page', 50));
+        $query = User::with(['role', 'department']);
+        if ($search = trim($request->input('search', ''))) {
+            $query->where(function ($users) use ($search) {
+                $users->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('username', 'LIKE', "%{$search}%")
+                    ->orWhere('email', 'LIKE', "%{$search}%")
+                    ->orWhereHas('role', fn($role) => $role->where('name', 'LIKE', "%{$search}%"));
+            });
+        }
+        foreach (['status', 'role_id', 'department_id'] as $filter) {
+            if ($value = $request->input($filter)) $query->where($filter, $value);
+        }
+        $users = $query->orderByDesc('id')->paginate(max(1, min(100, $request->integer('per_page', 25))));
 
         $roles = Role::orderBy('name')->get();
         $departments = Department::orderBy('name')->get();

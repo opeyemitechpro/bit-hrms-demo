@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import StaffPostingsModal from "./StaffPostingsModal";
+import { Pagination, QuickFilters, RecordFilters, useRecordPage } from "./RecordControls";
+import { Building2, MapPin, RefreshCw } from "lucide-react";
 
 export default function StaffPostingsTab({ staff, apiBase, permissions, onStaffUpdated }) {
   const [postings, setPostings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
+  const records = useRecordPage(postings, staff.id);
 
   const fetchPostings = async () => {
     setLoading(true);
@@ -41,13 +44,13 @@ export default function StaffPostingsTab({ staff, apiBase, permissions, onStaffU
   const getDeploymentBadge = (type) => {
     switch (type) {
       case "HEADQUARTERS":
-        return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">🏛 Headquarters</span>;
+        return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold"><Building2 size={12} className="inline-block mr-1" />Headquarters</span>;
       case "POSTED":
-        return <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded text-[10px] font-bold">📍 External Posting</span>;
+        return <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded text-[10px] font-bold"><MapPin size={12} className="inline-block mr-1" />External Posting</span>;
       case "SECONDED":
-        return <span className="bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded text-[10px] font-bold">🔄 Secondment</span>;
+        return <span className="bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded text-[10px] font-bold"><RefreshCw size={12} className="inline-block mr-1" />Secondment</span>;
       default:
-        return <span className="bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5 rounded text-[10px] font-bold">🏢 Internal Movement</span>;
+        return <span className="bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5 rounded text-[10px] font-bold"><Building2 size={12} className="inline-block mr-1" />Internal Movement</span>;
     }
   };
 
@@ -68,15 +71,17 @@ export default function StaffPostingsTab({ staff, apiBase, permissions, onStaffU
         )}
       </div>
 
+      <RecordFilters search={records.search} onSearch={records.setSearch} onReset={records.reset} label="Search posting history" />
+      <QuickFilters options={[{ key: "", label: "All movements" }, { key: "HEADQUARTERS", label: "Headquarters" }, { key: "POSTED", label: "External postings" }, { key: "SECONDED", label: "Secondments" }, { key: "INTERNAL_TRANSFER", label: "Internal transfers" }]} value={records.filter} onChange={records.setFilter} label="Deployment quick filters" />
       {loading ? (
         <div className="py-6 text-center text-slate-400">Loading posting history...</div>
-      ) : postings.length === 0 ? (
+      ) : records.total === 0 ? (
         <div className="py-6 text-center bg-slate-50 rounded-lg border border-slate-200 text-slate-400">
           No historical postings recorded for this officer.
         </div>
       ) : (
         <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-          {postings.map((p, index) => (
+          {records.rows.map((p, index) => (
             <div key={p.id} className="relative">
               {/* Timeline Marker Dot */}
               <div
@@ -127,6 +132,7 @@ export default function StaffPostingsTab({ staff, apiBase, permissions, onStaffU
       )}
 
       {/* Deployment Modal */}
+      <Pagination page={records.page} lastPage={records.lastPage} total={records.total} perPage={records.perPage} onPage={records.onPage} onPerPage={records.setPerPage} loading={loading} />
       <StaffPostingsModal
         isOpen={isDeployModalOpen}
         onClose={() => setIsDeployModalOpen(false)}

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { X } from "lucide-react";
 
 export default function StaffPostingsModal({ isOpen, onClose, staff, apiBase, onPostingSaved }) {
   if (!isOpen || !staff) return null;
@@ -52,7 +53,7 @@ export default function StaffPostingsModal({ isOpen, onClose, staff, apiBase, on
               {staff.title} {staff.surname.toUpperCase()}, {staff.first_name} (OG No: {staff.ogun_employee_number || staff.staff_number})
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+          <button onClick={onClose} title="Close deployment dialog" aria-label="Close deployment dialog" className="text-slate-400 hover:text-slate-600 font-bold p-1"><X size={18} /></button>
         </div>
 
         {error && (
@@ -69,10 +70,10 @@ export default function StaffPostingsModal({ isOpen, onClose, staff, apiBase, on
               onChange={(e) => setDeploymentType(e.target.value)}
               className="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-600"
             >
-              <option value="POSTED">📍 Posted to External MDA</option>
-              <option value="SECONDED">🔄 Secondment (Special Assignment)</option>
-              <option value="HEADQUARTERS">🏛 Recalled to BIT Headquarters</option>
-              <option value="INTERNAL_TRANSFER">🏢 Internal Directorate Transfer</option>
+              <option value="POSTED">Posted to External MDA</option>
+              <option value="SECONDED">Secondment (Special Assignment)</option>
+              <option value="HEADQUARTERS">Recalled to BIT Headquarters</option>
+              <option value="INTERNAL_TRANSFER">Internal Directorate Transfer</option>
             </select>
           </div>
 
