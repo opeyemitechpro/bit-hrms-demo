@@ -20,11 +20,12 @@ class AuditLogController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = AuditLog::query();
+        $query = AuditLog::query()->with('user:id,name');
 
         if ($search = trim($request->input('search', ''))) {
             $query->where(function ($q) use ($search) {
                 $q->where('username', 'LIKE', "%{$search}%")
+                    ->orWhereHas('user', fn ($user) => $user->where('name', 'LIKE', "%{$search}%"))
                     ->orWhere('action', 'LIKE', "%{$search}%")
                     ->orWhere('module', 'LIKE', "%{$search}%")
                     ->orWhere('ip_address', 'LIKE', "%{$search}%")
