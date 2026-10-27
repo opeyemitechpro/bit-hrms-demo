@@ -18,6 +18,8 @@ class StaffService
     public function createStaff(array $data): Staff
     {
         return DB::transaction(function () use ($data) {
+            $data['title'] = $data['title'] ?? 'Mr.';
+            $data['current_station'] = $data['current_station'] ?? 'BIT Headquarters, Abeokuta';
             $dob = $data['date_of_birth'];
             $dofa = $data['date_of_first_appointment'];
             $data['expected_retirement_date'] = Staff::calculateRetirementDate($dob, $dofa)->toDateString();

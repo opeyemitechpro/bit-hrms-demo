@@ -77,6 +77,46 @@ class RecordBrowsingTest extends TestCase
         DB::table('staff')->insert($records);
     }
 
+    public function test_staff_form_saves_a_record_and_reports_duplicate_employee_numbers(): void
+    {
+        $payload = [
+            'staff_number' => 'TEST/NEW',
+            'ogun_employee_number' => 'OG/NEW/001',
+            'title' => 'Ms.',
+            'surname' => 'NewOfficer',
+            'first_name' => 'Demo',
+            'middle_name' => '',
+            'gender' => 'Female',
+            'date_of_birth' => '1994-06-15',
+            'official_email' => 'new-officer@example.test',
+            'department_id' => 1,
+            'unit_id' => 1,
+            'designation_id' => 1,
+            'grade_level_id' => 1,
+            'step' => 1,
+            'employment_status_id' => 1,
+            'current_station' => 'BIT Headquarters',
+            'date_of_first_appointment' => '2018-09-01',
+            'date_of_confirmation' => '',
+            'date_of_present_appointment' => '2024-01-15',
+        ];
+        $this->postJson('/api/v1/staff', $payload)->assertCreated()->assertJsonPath('success', true);
+        $this->assertDatabaseHas('staff', ['staff_number' => 'TEST/NEW', 'expected_retirement_date' => '2053-09-01']);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'STAFF_CREATED', 'username' => 'demo-admin']);
+        $payload['staff_number'] = 'TEST/ANOTHER';
+        $payload['official_email'] = 'another-officer@example.test';
+        $this->postJson('/api/v1/staff', $payload)->assertUnprocessable()->assertJsonValidationErrors('ogun_employee_number');
+        $payload['ogun_employee_number'] = '';
+        $payload['current_station'] = '';
+        $payload['title'] = '';
+        $this->postJson('/api/v1/staff', $payload)->assertCreated();
+        $this->assertDatabaseHas('staff', [
+            'staff_number' => 'TEST/ANOTHER',
+            'current_station' => 'BIT Headquarters, Abeokuta',
+            'title' => 'Mr.',
+        ]);
+    }
+
     public function test_staff_pagination_reaches_records_beyond_the_old_limit(): void
     {
         $first = $this->getJson('/api/v1/staff?per_page=25')->assertOk()->assertJsonCount(25, 'data')

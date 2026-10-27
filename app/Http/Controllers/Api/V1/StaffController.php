@@ -143,7 +143,7 @@ class StaffController extends Controller
     {
         $validated = $request->validate([
             'staff_number' => 'required|string|max:50|unique:staff,staff_number',
-            'ogun_employee_number' => 'nullable|string|max:50',
+            'ogun_employee_number' => 'nullable|string|max:50|unique:staff,ogun_employee_number',
             'file_number' => 'nullable|string|max:50',
             'ippis_number' => 'nullable|string|max:50',
             'title' => 'nullable|string|max:20',
@@ -195,7 +195,7 @@ class StaffController extends Controller
 
         $validated = $request->validate([
             'staff_number' => "required|string|max:50|unique:staff,staff_number,{$id}",
-            'ogun_employee_number' => 'nullable|string|max:50',
+            'ogun_employee_number' => "nullable|string|max:50|unique:staff,ogun_employee_number,{$id}",
             'file_number' => 'nullable|string|max:50',
             'ippis_number' => 'nullable|string|max:50',
             'title' => 'nullable|string|max:20',

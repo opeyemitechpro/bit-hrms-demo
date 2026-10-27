@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import ThemeToggle from "./ThemeToggle";
 
 const QUICK_ACCESS_ENABLED = false;
 
@@ -134,8 +135,9 @@ export default function LoginPortal({ onLogin, loading, error }) {
             Ogun State Government Security Gateway
           </span>
         </div>
-        <div className="text-[11px] font-mono text-slate-400 hidden sm:block">
-          Public Service HRMS &bull; Version 1.0 Enterprise
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-mono text-slate-400 hidden sm:block">Public Service HRMS &bull; Version 1.0 Enterprise</span>
+          <ThemeToggle />
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import StaffPostingsTab from "./components/StaffPostingsTab";
 import StaffDocumentsTab from "./components/StaffDocumentsTab";
 import FirstLoginModal from "./components/FirstLoginModal";
 import UserManagementModal from "./components/UserManagementModal";
+import ThemeToggle from "./components/ThemeToggle";
 import { Pagination, QuickFilters, RecordFilters, STAFF_QUICK_FILTERS, useRecordPage } from "./components/RecordControls";
 import { Building2, CalendarDays, ClipboardList, Download, Folder, MapPin, Printer, RefreshCw, X } from "lucide-react";
 
@@ -466,7 +467,9 @@ export default function App() {
       if (err.response?.status === 422 && err.response?.data?.errors) {
         setFormErrors(err.response.data.errors);
       } else {
-        setFeedback({ type: "error", message: err.response?.data?.message || "Operation failed." });
+        setFormErrors({ _form: [err.response?.status >= 500
+          ? "The server could not save this record. Your entries have been kept. Please retry, or ask your administrator to check the application and database connection."
+          : err.response?.data?.message || "Unable to save the record. Check your connection and try again."] });
       }
     } finally {
       setSubmitting(false);
@@ -606,7 +609,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-100 font-sans text-slate-800 antialiased">
+    <div className="app-shell h-dvh overflow-hidden flex bg-slate-100 font-sans text-slate-800 antialiased">
       {/* Mobile Drawer Overlay */}
       {isMobileMenuOpen && (
         <div
@@ -617,12 +620,12 @@ export default function App() {
 
       {/* Sidebar Navigation (Responsive Drawer on mobile, Fixed on Desktop) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`app-sidebar fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 transform transition-transform duration-200 ease-in-out lg:translate-x-0 ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Official Brand Header */}
-        <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+        <div className="sidebar-brand shrink-0 p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
               src="/images/ogun_state_logo.png"
@@ -651,7 +654,7 @@ export default function App() {
         </div>
 
         {/* Sidebar Nav Items */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto text-xs">
+        <nav aria-label="Main navigation" className="sidebar-navigation flex-1 min-h-0 p-3 space-y-1 overflow-y-auto text-xs">
           <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Core HR Modules</div>
 
           {navItems.map((item) => (
@@ -720,19 +723,19 @@ export default function App() {
           )}
 
           {/* Future Modules */}
-          <div className="pt-5 border-t border-slate-800 mt-4">
-            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Future Modules (V2)</div>
+          <details className="pt-2 border-t border-slate-800 mt-2">
+            <summary className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 cursor-pointer">Future Modules (V2)</summary>
             {["Leave Management", "Recruitment & Onboarding", "Promotions", "APER Performance", "Payroll Integration"].map((mod) => (
               <div key={mod} className="flex justify-between items-center px-3 py-1.5 text-slate-500 text-[11px] cursor-not-allowed">
                 <span className="truncate">{mod}</span>
                 <span className="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">Soon</span>
               </div>
             ))}
-          </div>
+          </details>
         </nav>
 
         {/* Authenticated User Profile & Session Controls */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950 text-xs space-y-2.5">
+        <div className="sidebar-session shrink-0 p-3 border-t border-slate-800 bg-slate-950 text-xs space-y-2.5">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-emerald-800 text-white font-bold flex items-center justify-center text-xs shrink-0 border border-emerald-600 shadow-xs">
               {currentUser?.name ? currentUser.name.split(" ").filter(Boolean).map((n) => n[0]).slice(0, 2).join("") : "U"}
@@ -787,10 +790,10 @@ export default function App() {
       </aside>
 
       {/* Main Workspace */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto lg:ml-72">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-xs sticky top-0 z-30">
-          <div className="flex items-center gap-3">
+        <header className="min-h-16 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs sticky top-0 z-30">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Hamburger Button for Mobile / Tablet */}
             <button
               onClick={() => setIsMobileMenuOpen(true)}
@@ -813,7 +816,7 @@ export default function App() {
                 <div className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">
                   Ogun State Government
                 </div>
-                <div className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+                <div className="text-[11px] sm:text-sm font-bold text-slate-900 leading-tight">
                   Bureau of Information Technology
                 </div>
               </div>
@@ -821,6 +824,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2.5">
+            <ThemeToggle />
             <div className="hidden md:flex flex-col text-right">
               <span className="text-xs font-bold text-slate-900 leading-tight">
                 {currentUser.name}
@@ -830,7 +834,7 @@ export default function App() {
               </span>
             </div>
 
-            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider shadow-xs ${
+            <span className={`hidden sm:inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider shadow-xs ${
               currentUser.role?.code === 'SUPER_ADMIN' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
               currentUser.role?.code === 'HR_ADMIN' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
               currentUser.role?.code === 'HR_OFFICER' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
@@ -1802,10 +1806,10 @@ export default function App() {
       {/* MODAL 1: ADD / EDIT STAFF MODAL (RESPONSIVE) */}
       {isFormModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg max-w-3xl w-full p-4 sm:p-6 space-y-4 border border-slate-200 shadow-2xl my-6 max-h-[90vh] overflow-y-auto">
+          <div role="dialog" aria-modal="true" aria-labelledby="staff-form-heading" className="bg-white rounded-lg max-w-3xl w-full p-4 sm:p-6 space-y-4 border border-slate-200 shadow-2xl my-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 id="staff-form-heading" className="text-base font-bold text-slate-900">
                   {editingStaffId ? "Edit Staff Record" : "Add New Staff Member"}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -1836,10 +1840,14 @@ export default function App() {
                   <input
                     type="text"
                     placeholder="e.g. 21442"
+                    aria-label="OG Number (Civil Service)"
+                    aria-invalid={Boolean(formErrors.ogun_employee_number)}
+                    aria-describedby={formErrors.ogun_employee_number ? "og-number-error" : undefined}
                     value={formData.ogun_employee_number}
                     onChange={(e) => setFormData({ ...formData, ogun_employee_number: e.target.value })}
                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded font-mono focus:ring-1 focus:ring-emerald-600"
                   />
+                  {formErrors.ogun_employee_number && <p id="og-number-error" className="text-rose-600 text-[10px] mt-0.5">{formErrors.ogun_employee_number[0]}</p>}
                 </div>
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">File Number</label>
@@ -2130,6 +2138,14 @@ export default function App() {
               )}
 
               {/* Modal Buttons */}
+              {Object.keys(formErrors).length > 0 && (
+                <div role="alert" className="p-3 rounded border border-rose-200 bg-rose-50 text-rose-800">
+                  <p className="font-semibold mb-1">Staff record was not saved</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    {Object.entries(formErrors).flatMap(([field, messages]) => messages.map((message, index) => <li key={`${field}-${index}`}>{message}</li>))}
+                  </ul>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
