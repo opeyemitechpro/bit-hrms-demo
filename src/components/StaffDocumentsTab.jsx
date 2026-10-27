@@ -211,7 +211,7 @@ export default function StaffDocumentsTab({ staff, apiBase, permissions }) {
 
               <div className="flex flex-col items-end gap-1 shrink-0">
                 <a
-                  href={`http://127.0.0.1:8000${doc.file_path}`}
+                  href={doc.file_path}
                   target="_blank"
                   rel="noreferrer"
                   className="px-2 py-0.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded text-[11px] font-bold border border-emerald-200"

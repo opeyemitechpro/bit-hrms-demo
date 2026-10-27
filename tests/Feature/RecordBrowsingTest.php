@@ -134,15 +134,17 @@ class RecordBrowsingTest extends TestCase
             ->assertJsonPath('meta.total', 60)->assertJsonCount(10, 'data');
         $this->getJson('/api/v1/staff?quick_filter=ACCOUNTANT&status=POSTED')->assertOk()
             ->assertJsonPath('meta.total', 15);
-        $this->getJson('/api/v1/staff?search=BeyondLimit%20Demo&search_field=name')->assertOk()->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/v1/staff?search=beyondlimit%20demo&search_field=name')->assertOk()->assertJsonPath('meta.total', 1);
         $this->getJson('/api/v1/staff?search=BeyondLimit&search_field=ogun_no')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/v1/staff/nominal-roll?search=beyondlimit')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.staff_number', 'TEST/120');
         $this->getJson('/api/v1/staff?per_page=999')->assertOk()->assertJsonCount(100, 'data');
     }
 
     public function test_audit_logs_include_and_search_the_actor_name(): void
     {
         AuditLogService::log('STAFF_CREATED', 'STAFF_MANAGEMENT');
-        $this->getJson('/api/v1/admin/audit-logs?search=Ada')->assertOk()
+        $this->getJson('/api/v1/admin/audit-logs?search=ada')->assertOk()
             ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.username', 'demo-admin')
             ->assertJsonPath('data.0.user.name', 'Ada Demo Administrator');
         $this->getJson('/api/v1/admin/audit-logs?search=Unmatched')->assertOk()->assertJsonPath('meta.total', 0);
@@ -158,7 +160,7 @@ class RecordBrowsingTest extends TestCase
             'role_id' => 1,
             'status' => 'suspended',
         ]);
-        $this->getJson('/api/v1/admin/users?status=suspended&search=Operator&per_page=10')->assertOk()
+        $this->getJson('/api/v1/admin/users?status=suspended&search=suspended&per_page=10')->assertOk()
             ->assertJsonPath('data.total', 1)->assertJsonPath('data.data.0.username', 'operator');
         $this->getJson('/api/v1/admin/users?per_page=1&page=2')->assertOk()
             ->assertJsonPath('data.total', 2)->assertJsonPath('data.current_page', 2)->assertJsonCount(1, 'data.data');

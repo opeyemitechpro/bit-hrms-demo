@@ -15,31 +15,31 @@ class NominalRollController extends Controller
 
         if ($search = trim($request->input('search', ''))) {
             $query->where(function ($q) use ($search) {
-                $q->where('staff_number', 'LIKE', "%{$search}%")
-                    ->orWhere('ogun_employee_number', 'LIKE', "%{$search}%")
-                    ->orWhere('file_number', 'LIKE', "%{$search}%")
-                    ->orWhere('ippis_number', 'LIKE', "%{$search}%")
-                    ->orWhere('surname', 'LIKE', "%{$search}%")
-                    ->orWhere('first_name', 'LIKE', "%{$search}%")
-                    ->orWhere('middle_name', 'LIKE', "%{$search}%")
-                    ->orWhere('official_email', 'LIKE', "%{$search}%")
-                    ->orWhere('phone_number', 'LIKE', "%{$search}%")
-                    ->orWhere('qualification', 'LIKE', "%{$search}%")
-                    ->orWhere('lga_of_origin', 'LIKE', "%{$search}%")
-                    ->orWhere('state_of_origin', 'LIKE', "%{$search}%")
-                    ->orWhere('current_station', 'LIKE', "%{$search}%")
-                    ->orWhere('remarks', 'LIKE', "%{$search}%")
+                $q->whereLike('staff_number', "%{$search}%")
+                    ->orWhereLike('ogun_employee_number', "%{$search}%")
+                    ->orWhereLike('file_number', "%{$search}%")
+                    ->orWhereLike('ippis_number', "%{$search}%")
+                    ->orWhereLike('surname', "%{$search}%")
+                    ->orWhereLike('first_name', "%{$search}%")
+                    ->orWhereLike('middle_name', "%{$search}%")
+                    ->orWhereLike('official_email', "%{$search}%")
+                    ->orWhereLike('phone_number', "%{$search}%")
+                    ->orWhereLike('qualification', "%{$search}%")
+                    ->orWhereLike('lga_of_origin', "%{$search}%")
+                    ->orWhereLike('state_of_origin', "%{$search}%")
+                    ->orWhereLike('current_station', "%{$search}%")
+                    ->orWhereLike('remarks', "%{$search}%")
                     ->orWhereHas('designation', function ($sub) use ($search) {
-                        $sub->where('name', 'LIKE', "%{$search}%")
-                            ->orWhere('code', 'LIKE', "%{$search}%")
-                            ->orWhere('cadre_name', 'LIKE', "%{$search}%");
+                        $sub->whereLike('name', "%{$search}%")
+                            ->orWhereLike('code', "%{$search}%")
+                            ->orWhereLike('cadre_name', "%{$search}%");
                     })
                     ->orWhereHas('department', function ($sub) use ($search) {
-                        $sub->where('name', 'LIKE', "%{$search}%")
-                            ->orWhere('code', 'LIKE', "%{$search}%");
+                        $sub->whereLike('name', "%{$search}%")
+                            ->orWhereLike('code', "%{$search}%");
                     })
                     ->orWhereHas('gradeLevel', function ($sub) use ($search) {
-                        $sub->where('name', 'LIKE', "%{$search}%");
+                        $sub->whereLike('name', "%{$search}%");
                     });
             });
         }

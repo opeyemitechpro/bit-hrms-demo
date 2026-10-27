@@ -24,13 +24,13 @@ class AuditLogController extends Controller
 
         if ($search = trim($request->input('search', ''))) {
             $query->where(function ($q) use ($search) {
-                $q->where('username', 'LIKE', "%{$search}%")
-                    ->orWhere('action', 'LIKE', "%{$search}%")
-                    ->orWhere('module', 'LIKE', "%{$search}%")
-                    ->orWhere('ip_address', 'LIKE', "%{$search}%")
-                    ->orWhere('record_type', 'LIKE', "%{$search}%")
-                    ->orWhere('record_id', 'LIKE', "%{$search}%")
-                    ->orWhereHas('user', fn($user) => $user->where('name', 'LIKE', "%{$search}%"));
+                $q->whereLike('username', "%{$search}%")
+                    ->orWhereLike('action', "%{$search}%")
+                    ->orWhereLike('module', "%{$search}%")
+                    ->orWhereLike('ip_address', "%{$search}%")
+                    ->orWhereLike('record_type', "%{$search}%")
+                    ->orWhereLike('record_id', "%{$search}%")
+                    ->orWhereHas('user', fn($user) => $user->whereLike('name', "%{$search}%"));
             });
         }
 
